@@ -2,7 +2,7 @@
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, readFile, download, relTime, hueOf, initials, coverHTML, vibrate } from './ui.js';
 import { S, TYPES, STATUSES, statusLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
-import { searchTeams, teamFixtures, ATTRIBUTION, testTMDBKey, searchInfo } from './api.js';
+import { searchTeams, teamFixtures, ATTRIBUTION, searchInfo } from './api.js';
 import { db } from './db.js';
 import { cardHTML, render, go, applyTheme, promptInstall, APP_VERSION } from './app.js';
 
@@ -30,8 +30,7 @@ export function renderPlatforms(root) {
         <span class="plat-count">${n} ${n === 1 ? 'obra' : 'obras'}</span>
       </a>`;
     }).join('')}
-  </div>
-  <p class="muted small pad">Los nombres de las plataformas se muestran solo como texto. La app no está afiliada a ninguna de ellas.</p>`;
+  </div>`;
 }
 
 export function renderPlatform(root, key) {
@@ -274,13 +273,6 @@ export function renderSettings(root) {
   </section>
 
   <section class="panel">
-    <h3>🎬 TMDB (opcional)</h3>
-    <p class="muted small">Pega tu clave gratuita de TMDB (API Key v3 o token de lectura) para buscar portadas de películas y series. Sin clave, la app funciona igual con AniList y TVmaze.</p>
-    <div class="field-row"><input id="tmdb" type="password" autocomplete="off" placeholder="Clave de TMDB" value="${esc(st.tmdbKey || '')}"><button class="btn" id="tmdb-save">Guardar</button></div>
-    <p class="attr">${esc(ATTRIBUTION.tmdb.text)}</p>
-  </section>
-
-  <section class="panel">
     <h3>🎨 Apariencia</h3>
     <div class="field inline"><span>Color</span><div class="swatches">${Object.entries(accents).map(([k, c]) => `<button class="swatch ${st.accent === k ? 'on' : ''}" data-accent="${k}" style="--c:${c}" aria-label="${k}"></button>`).join('')}</div></div>
     <label class="toggle"><span>Negro puro (AMOLED)</span><input type="checkbox" id="amoled" ${st.amoled ? 'checked' : ''}><i></i></label>
@@ -308,9 +300,8 @@ export function renderSettings(root) {
     <ul class="small attr-list">
       <li>Datos de manhwa, manga y anime: <a href="https://anilist.co" target="_blank" rel="noopener">AniList</a></li>
       <li>Datos de series: <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA 4.0)</li>
-      <li>${esc(ATTRIBUTION.tmdb.text)} <a href="https://www.themoviedb.org" target="_blank" rel="noopener">themoviedb.org</a></li>
+      <li>Datos de películas y series: <a href="https://es.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0)</li>
       <li>Fútbol: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a></li>
-      <li>Netflix, Prime Video, Disney+, HBO Max, YouTube y Crunchyroll son marcas de sus dueños; aquí solo aparecen como texto.</li>
     </ul>
     <p class="small muted">Código abierto con licencia MIT.</p>
   </section>`;
@@ -349,15 +340,6 @@ export function renderSettings(root) {
       } catch (err) { toast(err.message || 'No se pudo importar.'); }
     });
   };
-  $('#tmdb-save', root).onclick = async () => {
-    const key = $('#tmdb', root).value.trim();
-    if (key) {
-      try { await testTMDBKey(key); toast('Clave de TMDB verificada', { icon: '✅' }); }
-      catch { if (!(await confirmDialog('No se pudo verificar', 'TMDB no aceptó la clave (o no hay conexión). ¿Guardarla igual?', { ok: 'Guardar' }))) return; }
-    }
-    await setPref('tmdbKey', key);
-    if (!key) toast('Clave de TMDB eliminada');
-  };
   $$('[data-accent]', root).forEach((b) => b.onclick = async () => { await setPref('accent', b.dataset.accent); applyTheme(); $$('[data-accent]', root).forEach((x) => x.classList.toggle('on', x === b)); });
   $('#amoled', root).onchange = async (e) => { await setPref('amoled', e.target.checked); applyTheme(); };
   $('#motion', root).onchange = async (e) => { await setPref('motion', e.target.checked ? 'off' : 'auto'); applyTheme(); };
@@ -394,7 +376,7 @@ export async function fillCovers(ids = null) {
   for (let i = 0; i < list.length && !stop; i++) {
     const w = list[i];
     try {
-      const res = await searchInfo(w.title, w.type, S.settings.tmdbKey);
+      const res = await searchInfo(w.title, w.type);
       const key = normKey(w.title);
       const best = res.find((r) => normKey(r.title) === key || (r.altTitles || []).some((a) => normKey(a) === key)) || (res[0] && res.length && normKey(res[0].title).includes(key.slice(0, 6)) ? res[0] : null);
       if (best && best.cover) {

@@ -15,8 +15,8 @@ App web progresiva (PWA) en español para llevar el control de lo que lees y ves
 - **Calificación** de 1 a 5 estrellas y **favoritos**.
 - **Portadas e información automática** al escribir el nombre:
   - Manhwa, manga y anime: [AniList](https://anilist.co) (gratis, sin clave).
-  - Series: [TVmaze](https://www.tvmaze.com) (gratis, sin clave).
-  - Películas y series: [TMDB](https://www.themoviedb.org), opcional, con tu clave gratuita en Ajustes.
+  - Series: [TVmaze](https://www.tvmaze.com) y [Wikipedia](https://es.wikipedia.org) (gratis, sin clave).
+  - Películas: [Wikipedia](https://es.wikipedia.org) (gratis, sin clave): nombre, sinopsis y póster.
   - Portada propia por link o desde la galería del teléfono.
 - **Dónde lo lees o ves**: links por obra (Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll o "Página web"), una sección por plataforma y botón **Continuar**.
 - **Reconocimiento de links de lectura**: detecta la obra y el capítulo, y arma el link del siguiente capítulo:
@@ -102,9 +102,8 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 
 - La app no aloja ni muestra contenido de terceros: solo guarda y abre los links que tú agregas.
 - Datos e imágenes de manhwa/manga/anime: **AniList**. Datos de series: **TVmaze** (CC BY-SA 4.0).
-- *Este producto usa la API de TMDB, pero no está avalado ni certificado por TMDB.*
+- Textos de películas y series: **Wikipedia** (CC BY-SA 4.0).
 - Datos de fútbol: **TheSportsDB**. No se muestran escudos de clubes.
-- Netflix, Prime Video, Disney+, HBO Max, YouTube y Crunchyroll son marcas de sus respectivos dueños; aquí solo aparecen como texto, sin logos.
 
 ## 📄 Licencia
 

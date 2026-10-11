@@ -262,7 +262,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     const token = ++acToken;
     $('#ac-spin', el).hidden = false;
     try {
-      const res = await searchInfo(q, w.type, S.settings.tmdbKey);
+      const res = await searchInfo(q, w.type);
       if (token !== acToken) return;
       lastResults = res;
       const srcs = [...new Set(res.map((r) => r.source))];
@@ -271,7 +271,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
           <span class="ac-cover">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
           <span class="ac-text"><b>${esc(r.title)}</b><small>${esc([r.year, r.extra, r.pubStatus].filter(Boolean).join(' · '))}</small><small class="ac-gen">${esc(r.genres.slice(0, 3).join(', '))}</small></span>
         </button>`).join('') + `<div class="ac-attr">${srcs.map((x) => esc(ATTRIBUTION[x].text)).join(' · ')}</div>`
-        : `<div class="ac-empty">Sin resultados${w.type === 'pelicula' && !S.settings.tmdbKey ? '. Para películas agrega tu clave gratuita de TMDB en Ajustes.' : '.'}</div>`;
+        : `<div class="ac-empty">Sin resultados. Puedes escribir los datos y poner la portada a mano.</div>`;
     } catch {
       if (token === acToken) acBox.innerHTML = `<div class="ac-empty">No se pudo buscar ahora. Puedes llenar los datos a mano.</div>`;
     } finally {

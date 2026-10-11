@@ -1,4 +1,4 @@
-// APIs gratuitas y oficiales: AniList (GraphQL), TVmaze, TMDB (clave opcional del usuario) y TheSportsDB.
+// APIs gratuitas y sin clave: AniList (GraphQL), TVmaze, Wikipedia y TheSportsDB.
 import { cacheGet, cacheSet } from './db.js';
 
 const GENRES_ES = {
@@ -83,65 +83,76 @@ export async function searchTVmaze(query) {
   }));
 }
 
-// ---------- TMDB (opcional, con la clave gratuita del usuario) ----------
-function tmdbRequest(path, key, params = {}) {
-  const url = new URL('https://api.themoviedb.org/3' + path);
-  Object.entries({ language: 'es-ES', include_adult: 'false', ...params }).forEach(([k, v]) => url.searchParams.set(k, v));
-  const headers = { Accept: 'application/json' };
-  if (key.length > 60) headers.Authorization = 'Bearer ' + key; // token de lectura v4
-  else url.searchParams.set('api_key', key); // clave v3
-  return fetchJSON(url.href, { headers });
-}
-export async function searchTMDB(query, type, key) {
-  if (!key) return [];
-  const kind = type === 'pelicula' ? 'movie' : 'tv';
-  const data = await tmdbRequest('/search/' + kind, key, { query });
-  const genres = await tmdbGenres(kind, key).catch(() => ({}));
-  return (data.results || []).slice(0, 10).map((r) => ({
-    source: 'tmdb',
-    sourceId: r.id,
-    sourceUrl: `https://www.themoviedb.org/${kind}/${r.id}`,
-    title: r.title || r.name,
-    altTitles: [r.original_title || r.original_name].filter(Boolean),
-    cover: r.poster_path ? 'https://image.tmdb.org/t/p/w500' + r.poster_path : '',
-    synopsis: r.overview || '',
-    genres: (r.genre_ids || []).map((g) => genres[g]).filter(Boolean),
-    pubStatus: '',
-    total: null,
-    year: (r.release_date || r.first_air_date || '').slice(0, 4) || null,
-    extra: r.original_language ? r.original_language.toUpperCase() : '',
-  }));
-}
-const genreCache = {};
-async function tmdbGenres(kind, key) {
-  if (genreCache[kind]) return genreCache[kind];
-  const d = await tmdbRequest(`/genre/${kind}/list`, key);
-  genreCache[kind] = Object.fromEntries((d.genres || []).map((g) => [g.id, g.name]));
-  return genreCache[kind];
-}
-export async function testTMDBKey(key) {
-  const d = await tmdbRequest('/configuration', key);
-  return !!d.images;
+// ---------- Wikipedia (gratis, sin clave) ----------
+// Nombre y sinopsis desde Wikipedia en español; el póster desde Wikipedia en inglés,
+// que es donde suelen estar los pósters de películas y series.
+const wikiApi = (lang, params) => {
+  const url = new URL(`https://${lang}.wikipedia.org/w/api.php`);
+  Object.entries({ action: 'query', format: 'json', formatversion: '2', origin: '*', ...params }).forEach(([k, v]) => url.searchParams.set(k, v));
+  // Wikimedia pide identificar la app con este encabezado
+  return fetchJSON(url.href, { headers: { 'Api-User-Agent': 'BibliotecaDeAlejandria/1.1 (https://github.com/JuanPH-M/biblioteca-de-alejandria)' } });
+};
+const portrait = (t) => t && t.height > t.width * 1.15;
+
+export async function searchWikipedia(query, type) {
+  const hint = type === 'pelicula' ? 'película' : 'serie de televisión';
+  const d = await wikiApi('es', {
+    generator: 'search', gsrsearch: `${query} ${hint}`, gsrlimit: '10',
+    prop: 'pageimages|extracts|langlinks|pageprops|info', inprop: 'url',
+    exintro: '1', explaintext: '1', exsentences: '5', exlimit: 'max',
+    piprop: 'thumbnail', pithumbsize: '500', lllang: 'en', lllimit: 'max', ppprop: 'disambiguation',
+  });
+  const isKind = type === 'pelicula' ? /pel[ií]cula|film/i : /serie|programa de televisi|miniserie|telenovela/i;
+  let pages = (d?.query?.pages || []).filter((p) => !p.pageprops || !('disambiguation' in p.pageprops));
+  pages.sort((a, b) => a.index - b.index);
+  const matching = pages.filter((p) => isKind.test((p.extract || '').slice(0, 300)));
+  pages = (matching.length ? matching : pages).slice(0, 6);
+  // pósters desde Wikipedia en inglés (en español casi no hay pósters)
+  const enTitles = pages.map((p) => p.langlinks?.[0]?.title).filter(Boolean);
+  const enThumbs = {};
+  if (enTitles.length) {
+    try {
+      const en = await wikiApi('en', { titles: enTitles.join('|'), prop: 'pageimages', piprop: 'thumbnail', pithumbsize: '500', pilicense: 'any', redirects: '1' });
+      const redirects = Object.fromEntries((en?.query?.redirects || []).map((r) => [r.to, r.from]));
+      for (const p of en?.query?.pages || []) if (p.thumbnail) enThumbs[redirects[p.title] || p.title] = p.thumbnail;
+    } catch { /* sin póster en inglés */ }
+  }
+  return pages.map((p) => {
+    const en = enThumbs[p.langlinks?.[0]?.title];
+    const es = p.thumbnail;
+    const thumb = portrait(en) ? en : portrait(es) ? es : en || es;
+    const extract = (p.extract || '').trim();
+    const enTitle = p.langlinks?.[0]?.title || '';
+    const year = extract.match(/(?:pel[ií]cula|serie)[^.]{0,160}?\b((?:19|20)\d{2})\b/i)?.[1] || enTitle.match(/\b((?:19|20)\d{2})\b/)?.[1] || extract.match(/\b((?:19|20)\d{2})\b/)?.[1];
+    return {
+      source: 'wikipedia',
+      sourceId: p.pageid,
+      sourceUrl: p.fullurl || `https://es.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, '_'))}`,
+      title: p.title.replace(/\s*\((pel[ií]cula|serie de televisi[oó]n|serie|miniserie|película de \d{4}|\d{4})\)$/i, ''),
+      altTitles: [p.langlinks?.[0]?.title?.replace(/\s*\((film|TV series|miniseries|\d{4} film)\)$/i, '')].filter(Boolean),
+      cover: thumb?.source ? thumb.source.replace(/\?utm_[^#]*$/, '') : '',
+      synopsis: extract,
+      genres: [],
+      pubStatus: '',
+      total: null,
+      year: year ? +year : null,
+      extra: 'Wikipedia',
+    };
+  });
 }
 
 // Búsqueda combinada según el tipo de obra
-export async function searchInfo(query, type, tmdbKey) {
+export async function searchInfo(query, type) {
   const q = query.trim();
   if (q.length < 2) return [];
-  if (['manhwa', 'manga', 'anime'].includes(type)) {
-    const res = await searchAniList(q, type);
-    if (type === 'anime' && tmdbKey && res.length < 3) res.push(...(await searchTMDB(q, 'serie', tmdbKey).catch(() => [])));
-    return res;
-  }
+  if (['manhwa', 'manga', 'anime'].includes(type)) return searchAniList(q, type);
   if (type === 'serie') {
-    const [tm, tv] = await Promise.allSettled([tmdbKey ? searchTMDB(q, 'serie', tmdbKey) : Promise.resolve([]), searchTVmaze(q)]);
-    return [...(tm.value || []), ...(tv.value || [])];
+    const [tv, wk] = await Promise.allSettled([searchTVmaze(q), searchWikipedia(q, 'serie')]);
+    return [...(tv.value || []).slice(0, 6), ...(wk.value || []).slice(0, 3)];
   }
   if (type === 'pelicula') {
-    if (tmdbKey) return searchTMDB(q, 'pelicula', tmdbKey);
-    // Sin TMDB: AniList cubre películas de anime
-    const r = await searchAniList(q, 'anime').catch(() => []);
-    return r.filter((m) => /MOVIE/.test(m.extra));
+    const [wk, an] = await Promise.allSettled([searchWikipedia(q, 'pelicula'), searchAniList(q, 'anime')]);
+    return [...(wk.value || []), ...(an.value || []).filter((m) => /MOVIE/.test(m.extra)).slice(0, 2)];
   }
   return [];
 }
@@ -149,7 +160,7 @@ export async function searchInfo(query, type, tmdbKey) {
 export const ATTRIBUTION = {
   anilist: { name: 'AniList', url: 'https://anilist.co', text: 'Datos e imágenes de AniList' },
   tvmaze: { name: 'TVmaze', url: 'https://www.tvmaze.com', text: 'Datos de TVmaze (CC BY-SA 4.0)' },
-  tmdb: { name: 'TMDB', url: 'https://www.themoviedb.org', text: 'Este producto usa la API de TMDB, pero no está avalado ni certificado por TMDB.' },
+  wikipedia: { name: 'Wikipedia', url: 'https://es.wikipedia.org', text: 'Textos de Wikipedia (CC BY-SA 4.0)' },
   thesportsdb: { name: 'TheSportsDB', url: 'https://www.thesportsdb.com', text: 'Datos de fútbol de TheSportsDB' },
 };
 
