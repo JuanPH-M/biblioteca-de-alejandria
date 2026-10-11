@@ -45,7 +45,7 @@ export const S = {
   works: [],
   patterns: {},
   teams: [],
-  settings: { leagues: [], installHint: 0, lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated' },
+  settings: { leagues: [], installHint: 0, lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated', browser: 'system', sport: 'futbol', sportFavs: {} },
   filters: { q: '', type: 'all', status: 'all', platform: 'all', fav: false },
 };
 
@@ -240,7 +240,27 @@ export function needsLink(w) {
   return !continueTarget(w)?.next;
 }
 
-export function openUrl(url) {
+// ---------- con qué navegador se abren los links ----------
+export const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const IS_ANDROID = /Android/i.test(navigator.userAgent);
+// ios: cómo abrir el link en esa app del iPhone · android: paquete de la app en Android
+export const BROWSERS = {
+  system: { name: 'Navegador predeterminado', desc: 'Sale de la app y abre el navegador que usas normalmente', emoji: '🌐' },
+  app: { name: 'Dentro de la app', desc: 'Se abre encima de la app; vuelves con ← o «Listo»', emoji: '📱' },
+  safari: { name: 'Safari', emoji: '🧭', ios: (u) => 'x-safari-' + u },
+  chrome: { name: 'Google Chrome', emoji: '🟡', ios: (u) => u.replace(/^http/, 'googlechrome'), android: 'com.android.chrome' },
+  brave: { name: 'Brave', emoji: '🦁', ios: (u) => 'brave://open-url?url=' + encodeURIComponent(u), android: 'com.brave.browser' },
+  firefox: { name: 'Firefox', emoji: '🦊', ios: (u) => 'firefox://open-url?url=' + encodeURIComponent(u), android: 'org.mozilla.firefox' },
+  edge: { name: 'Microsoft Edge', emoji: '🌊', ios: (u) => u.replace(/^http/, 'microsoft-edge-http'), android: 'com.microsoft.emmx' },
+  opera: { name: 'Opera', emoji: '⭕', android: 'com.opera.browser' },
+  samsung: { name: 'Samsung Internet', emoji: '🪐', android: 'com.sec.android.app.sbrowser' },
+  duckduckgo: { name: 'DuckDuckGo', emoji: '🦆', ios: (u) => 'ddgQuickLink://' + u, android: 'com.duckduckgo.mobile.android' },
+};
+// Navegadores que se pueden elegir en este dispositivo
+export function browserChoices() {
+  return Object.entries(BROWSERS).filter(([k, b]) => k === 'system' || k === 'app' || (IS_IOS ? b.ios : IS_ANDROID ? b.android : false)).map(([k]) => k);
+}
+function openBlank(url) {
   const a = document.createElement('a');
   a.href = url;
   a.target = '_blank';
@@ -248,6 +268,32 @@ export function openUrl(url) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+export function openUrl(url, { browser } = {}) {
+  const k = browser || S.settings.browser || 'system';
+  const b = BROWSERS[k];
+  if (!/^https?:\/\//i.test(url) || !b || k === 'system') return openBlank(url);
+  if (k === 'app') {
+    // misma ventana: se espera un instante para que se guarde el avance antes de salir
+    setTimeout(() => location.assign(url), 350);
+    return;
+  }
+  if (IS_ANDROID && b.android) {
+    // si ese navegador no está instalado, Android abre el link en el navegador normal
+    const scheme = url.slice(0, url.indexOf(':')).toLowerCase();
+    location.href = `intent://${url.replace(/^https?:\/\//i, '')}#Intent;scheme=${scheme};package=${b.android};S.browser_fallback_url=${encodeURIComponent(url)};end`;
+    return;
+  }
+  if (IS_IOS && b.ios) {
+    location.href = b.ios(url);
+    // si esa app no está instalada no pasa nada: a los 2,5 s se abre con el navegador normal
+    const t = setTimeout(() => { if (!document.hidden && document.hasFocus()) openBlank(url); }, 2500);
+    const stop = () => { if (document.hidden) clearTimeout(t); };
+    document.addEventListener('visibilitychange', stop, { once: true });
+    window.addEventListener('blur', () => clearTimeout(t), { once: true });
+    return;
+  }
+  openBlank(url);
 }
 
 // Aplica un link analizado a una obra existente (actualiza progreso en vez de duplicar)

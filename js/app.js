@@ -1,14 +1,14 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
-import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress } from './ui.js';
+import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
 import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
 import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp } from './sections.js';
-import { renderFootball } from './football.js';
+import { renderSports } from './sports.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.9.0';
+export const APP_VERSION = '2.0.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -39,6 +39,13 @@ document.addEventListener('click', (e) => {
   const cover = link.querySelector('.cover');
   if (cover) cover.style.viewTransitionName = 'vt-cover';
 }, true);
+// Los links guardados se abren con el navegador elegido en Ajustes
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a.link-url');
+  if (!a) return;
+  e.preventDefault();
+  openUrl(a.href);
+});
 export async function render({ keepScroll = false } = {}) {
   const r = parseRoute();
   if (r.name === 'nuevo') { history.replaceState(null, '', '#/'); await render(); openEditor(); return; }
@@ -49,7 +56,7 @@ export async function render({ keepScroll = false } = {}) {
   lastRoute = routeKey;
   const map = {
     home: renderHome, obra: (el) => renderDetail(el, r.param), plataformas: renderPlatforms, plataforma: (el) => renderPlatform(el, r.param),
-    futbol: (el) => renderFootball(el, r.param), stats: renderStats, ajustes: renderSettings, importar: renderImport,
+    deportes: (el) => renderSports(el, r.param), futbol: (el) => renderSports(el, 'futbol', r.param), stats: renderStats, ajustes: renderSettings, importar: renderImport,
   };
   const fn = map[r.name] || renderHome;
   const update = async () => {
@@ -73,7 +80,7 @@ export async function render({ keepScroll = false } = {}) {
     await update();
     if (changed) { void view.offsetWidth; view.classList.add('view-enter'); }
   }
-  const tab = { home: 'home', obra: 'home', plataformas: 'plataformas', plataforma: 'plataformas', futbol: 'futbol', stats: 'stats', ajustes: 'stats', importar: 'stats' }[r.name] || 'home';
+  const tab = { home: 'home', obra: 'home', plataformas: 'plataformas', plataforma: 'plataformas', futbol: 'deportes', deportes: 'deportes', stats: 'stats', ajustes: 'stats', importar: 'stats' }[r.name] || 'home';
   $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
 }
 window.addEventListener('hashchange', () => render());
@@ -126,6 +133,7 @@ async function renderHome(root) {
   const showBackup = total >= 3 && (backupDays == null || backupDays > 14) && !(S.settings.backupSnooze > Date.now());
   const cont = continueList();
   const [spot, ...rest] = cont;
+  const spotPool = cont.slice(0, 5);
   const h = new Date().getHours();
   const hello = h < 5 ? 'Buenas noches' : h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
   const today = todayCount();
@@ -148,7 +156,7 @@ async function renderHome(root) {
     </div>
     <div class="suggest" id="suggest" role="listbox" hidden></div>
   </div>
-  ${spot && !f.q ? spotlightHTML(spot) : ''}
+  ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="tablist" aria-label="Obras en curso">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${i}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}</div>` : ''}</div>` : ''}
   ${total >= 2 && !f.q ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>Deja que la suerte elija qué leer o ver</small></span>${ICONS.sparkle}</button>` : ''}
   ${rest.length && !f.q ? `
   <section class="continue">
@@ -254,13 +262,8 @@ async function renderHome(root) {
   $('#ih-how', root)?.addEventListener('click', () => { if (!promptInstall()) openInstallHelp(); });
   $('#ih-x', root)?.addEventListener('click', async (e) => { e.currentTarget.closest('.banner').remove(); await setPref('installHint', Date.now()); });
   root.addEventListener('click', onContinueClick);
-  // toda la tarjeta destacada (y cada elemento del carrusel) abre la obra, no solo la portada
-  root.querySelectorAll('.spotlight, .c-item').forEach((card) => card.addEventListener('click', (e) => {
-    if (e.target.closest('button, a')) return;
-    const cover = card.querySelector('.cover');
-    if (cover && document.startViewTransition) { clearVTNames(); cover.style.viewTransitionName = 'vt-cover'; }
-    go('#/obra/' + card.dataset.id);
-  }));
+  root.addEventListener('click', onCardClick);
+  if (spot && !f.q) startSpotRotation(root, spotPool);
   $('#next-pick', root)?.addEventListener('click', openRoulette);
   // al volver del detalle, la portada regresa a su tarjeta
   if (lastDetailId) {
@@ -273,6 +276,63 @@ async function renderHome(root) {
 function progressPct(w) {
   if (w.type === 'serie') { const tot = seriesTotals(w); return tot ? Math.round((tot.seen / tot.total) * 100) : null; }
   return w.total ? Math.min(100, Math.round((currentNumber(w) / w.total) * 100)) : null;
+}
+
+// Toda la tarjeta destacada (y cada elemento del carrusel) abre la obra, no solo la portada
+function onCardClick(e) {
+  const card = e.target.closest('.spotlight, .c-item');
+  if (!card || e.target.closest('button, a') || card.dataset.swiped) return;
+  const cover = card.querySelector('.cover');
+  if (cover && document.startViewTransition) { clearVTNames(); cover.style.viewTransitionName = 'vt-cover'; }
+  go('#/obra/' + card.dataset.id);
+}
+
+// La tarjeta destacada pasa sola a la siguiente obra en curso cada 5 segundos.
+// Se puede deslizar o tocar los puntos; se detiene mientras la tocas o hay una ventana abierta.
+const SPOT_MS = 5000;
+function startSpotRotation(root, pool) {
+  const deck = $('#spot-deck', root);
+  if (!deck || pool.length < 2) return;
+  let i = 0, holdUntil = 0, startX = null, startY = 0;
+  const show = (n, dir = 1) => {
+    i = (n + pool.length) % pool.length;
+    const old = deck.querySelector('.spotlight');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = spotlightHTML(pool[i]);
+    const nu = tmp.firstElementChild;
+    if (!reducedMotion()) nu.classList.add(dir > 0 ? 'sp-in-next' : 'sp-in-prev');
+    old.replaceWith(nu);
+    $$('.spot-dots button', deck).forEach((d, k) => { d.classList.toggle('on', k === i); d.style.animation = 'none'; void d.offsetWidth; d.style.animation = ''; });
+  };
+  const timer = setInterval(() => {
+    if (!deck.isConnected) { clearInterval(timer); return; }
+    if (document.hidden || sheetsOpen() || Date.now() < holdUntil) return;
+    show(i + 1);
+  }, SPOT_MS);
+  deck.addEventListener('click', (e) => {
+    const d = e.target.closest('[data-spot]');
+    if (!d) return;
+    e.stopPropagation();
+    holdUntil = Date.now() + SPOT_MS;
+    show(+d.dataset.spot, +d.dataset.spot >= i ? 1 : -1);
+  });
+  // deslizar con el dedo
+  deck.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; holdUntil = Date.now() + 60e3; });
+  const end = (e) => {
+    holdUntil = Date.now() + SPOT_MS;
+    if (startX == null) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    startX = null;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      const card = deck.querySelector('.spotlight');
+      card.dataset.swiped = '1'; // que el deslizamiento no abra la obra
+      setTimeout(() => delete card.dataset.swiped, 50);
+      show(i + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+      vibrate(6);
+    }
+  };
+  deck.addEventListener('pointerup', end);
+  deck.addEventListener('pointercancel', () => { startX = null; holdUntil = Date.now() + SPOT_MS; });
 }
 
 // Tarjeta grande con la obra que estás siguiendo

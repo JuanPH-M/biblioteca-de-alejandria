@@ -1,6 +1,6 @@
 # 🏛️ Biblioteca de Alejandría
 
-App web progresiva (PWA) en español para llevar el control de lo que lees y ves: **manhwas, mangas, animes, series, películas** y tu **fútbol** (equipos y ligas). Funciona en **Android y iPhone**, se instala en la pantalla de inicio, sirve sin internet y es 100 % gratis.
+App web progresiva (PWA) en español para llevar el control de lo que lees y ves: **manhwas, mangas, animes, series, películas** y tus **deportes**: fútbol, NBA, MLB, Fórmula 1 y UFC. Funciona en **Android y iPhone**, se instala en la pantalla de inicio, sirve sin internet y es 100 % gratis.
 
 **👉 Abrir la app:** https://juanph-m.github.io/biblioteca-de-alejandria/
 
@@ -71,7 +71,7 @@ En Android, con la app instalada, también puedes usar **Compartir → Alejandr�
 ### 4. Pantalla de inicio
 - **Saludo** al abrir y luego el nombre de la app.
 - **Buscador inteligente**: mientras escribes muestra sugerencias con portada de lo que más se parece (aunque escribas con errores, p. ej. *"solo levlng"*). Toca una para abrirla, o *＋ Agregar* si no la tienes.
-- **Tarjeta destacada** con lo último que estás siguiendo y su anillo de progreso: tócala en cualquier parte para abrir la obra.
+- **Tarjeta destacada** con lo que estás siguiendo y su anillo de progreso. **Cambia sola cada 5 segundos** entre tus 5 obras en curso (también puedes deslizarla o tocar los puntos) y se abre al tocarla en cualquier parte.
 - **🎲 ¿Qué sigue?**: una ruleta que elige al azar qué leer o ver.
 - **Continuar**: carrusel con lo que tienes en curso.
 - **Explorar**: tarjetas grandes por tipo (Todo, Manhwa, Manga, Anime, Serie, Película) y filtros por estado, plataforma y favoritos, buscador y orden.
@@ -80,7 +80,25 @@ En Android, con la app instalada, también puedes usar **Compartir → Alejandr�
 ### 5. Plataformas
 En la pestaña **Plataformas** ves un resumen y una tarjeta por plataforma (Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll y páginas web) con portadas, cuántas obras tienes y su estado. Al entrar a una ves sus números, lo que tienes en curso y filtros por estado. Si alguna serie o película no tiene plataforma, aparece un aviso para elegirla (también desde las acciones rápidas).
 
-### 6. Fútbol
+### 6. Deportes
+Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UFC**. La app recuerda el último que abriste.
+
+**NBA y MLB**
+- **📅 Partidos**: elige el día (desde 5 días atrás hasta 9 adelante) y ve los marcadores. Los partidos **en vivo** se marcan en rojo y se actualizan solos.
+- Toca un partido para ver el marcador por cuartos o entradas, el estadio, el canal, la cuenta regresiva y el **resumen en YouTube**.
+- **📊 Tabla**: posiciones por conferencia o liga, con ganados, perdidos, porcentaje y racha. En la NBA se marca el corte de playoffs y de play-in.
+- **⭐ Equipos**: sigue a tus equipos (desde un partido, la tabla o el botón *Seguir un equipo*). Sus partidos salen primero y con estrella, y cada uno muestra su próximo partido.
+
+**Fórmula 1**
+- La próxima carrera con **cuenta regresiva** y el horario de cada sesión (prácticas, clasificación, sprint y carrera) en tu hora local.
+- **🗓️ Calendario** de la temporada con el ganador de cada carrera. Toca una para ver los **resultados de la carrera, la clasificación y el sprint**.
+- **🧑‍✈️ Pilotos** y **🏭 Equipos**: el campeonato con podio, puntos y victorias.
+
+**UFC**
+- El próximo evento con su pelea estelar, récords y cuenta regresiva.
+- **📅 Próximos** y **🏁 Resultados**: toca un evento para ver toda la cartelera, quién ganó, por qué método (KO/TKO, sumisión o decisión), en qué asalto y el resumen en YouTube.
+
+**Fútbol**
 - **🛡️ Equipos**: toca **＋ Agregar equipo o selección**, búscalo y toca **Seguir**. Tus equipos aparecen como recuadros con su próximo partido; toca uno para ver sus próximos partidos y últimos resultados.
 - **🏆 Ligas**: toca **＋ Agregar liga o torneo** y elige entre las populares (Champions, Premier, La Liga, Liga BetPlay, **Torneo BetPlay – Primera B**, Copa Colombia, Libertadores…) o busca los torneos de un país. Al tocar una liga ves **Partidos**, **Tabla** y **Torneos** del mismo país.
 - **🛡️ Escudo propio**: dentro de un equipo o liga toca **Escudo** y pega el link de una imagen o elige una de tu galería. Se guarda solo en tu teléfono.
@@ -93,10 +111,13 @@ Cada obra tiene un espacio de **notas** que se guarda solo mientras escribes.
 ### 8. Estadísticas
 Totales por tipo y estado, capítulos leídos, episodios vistos, películas vistas, favoritas, mapa de actividad, géneros favoritos y mejor calificadas.
 
-### 9. Personalizar
+### 9. Navegador para abrir los links
+En **Ajustes → Abrir los links con** eliges dónde se abren tus capítulos: el **navegador predeterminado**, **dentro de la app** o uno en particular: **Chrome, Brave, Firefox, Edge, DuckDuckGo** y además **Safari** en iPhone, u **Opera y Samsung Internet** en Android. Si el navegador elegido no está instalado, el link se abre en el normal. Usa **Probar con un link** para comprobarlo.
+
+### 10. Personalizar
 En **Ajustes → Apariencia** elige entre 10 colores (violeta, azul, cian, esmeralda, dorado, naranja, coral, rojo, rosa y **blanco**: fondo negro, letras blancas y botones blancos), negro puro AMOLED y la opción de reducir animaciones.
 
-### 10. Eliminar
+### 11. Eliminar
 Eliminar una obra, serie, película, equipo, liga o patrón de sitio **siempre pide confirmación**.
 
 ---
@@ -148,6 +169,7 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 
 ## ⚠️ Límites conocidos
 
+- **Deportes:** NBA, MLB y UFC usan los datos públicos de ESPN, que no tienen documentación oficial y podrían cambiar algún día.
 - **Fútbol:** los datos gratuitos de TheSportsDB no incluyen alineaciones completas ni goleadores, por eso cada partido muestra solo el resultado; la tabla de posiciones muestra los primeros puestos.
 - **Películas:** Wikipedia no da géneros y algunas películas pequeñas o muy nuevas pueden no tener póster.
 - **iPhone:** no hay "Compartir → Alejandría" desde Safari (Apple no lo permite en apps web) ni vibración; todo lo demás funciona igual.
@@ -166,7 +188,7 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 - La app no aloja ni muestra contenido de terceros: solo guarda y abre los links que tú agregas.
 - Datos e imágenes de manhwa/manga/anime: **AniList**. Datos de series: **TVmaze** (CC BY-SA 4.0).
 - Textos de películas y series: **Wikipedia** (CC BY-SA 4.0).
-- Datos de fútbol: **TheSportsDB**. No se muestran escudos de clubes.
+- Datos de fútbol: **TheSportsDB**. NBA, MLB y UFC: datos públicos de **ESPN**. Fórmula 1: **Jolpica F1** (continuación abierta de Ergast). No se muestran escudos ni logos de equipos, ligas o marcas: solo nombres e iniciales con colores.
 
 ## 📄 Licencia
 

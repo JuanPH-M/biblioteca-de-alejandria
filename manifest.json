@@ -1,7 +1,7 @@
 {
   "name": "Biblioteca de Alejandría",
   "short_name": "Alejandría",
-  "description": "Control de manhwas, mangas, animes, series, películas y equipos de fútbol.",
+  "description": "Control de manhwas, mangas, animes, series, películas y deportes: fútbol, NBA, MLB, F1 y UFC.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -26,6 +26,6 @@
   "shortcuts": [
     { "name": "Agregar obra", "short_name": "Agregar", "url": "./#/nuevo", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Pegar link de capítulo", "short_name": "Pegar link", "url": "./#/pegar", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Mis equipos", "short_name": "Fútbol", "url": "./#/futbol", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Deportes", "short_name": "Deportes", "url": "./#/deportes", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

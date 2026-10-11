@@ -336,3 +336,180 @@ export async function matchInfo(id) {
     throw err;
   }
 }
+
+// ======================= OTROS DEPORTES =======================
+// NBA, MLB y UFC: datos públicos de ESPN (sin clave). F1: Jolpica (continuación abierta de Ergast).
+// Solo se usan textos y números; nunca logos ni imágenes de equipos o ligas.
+const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
+const ESPN2 = 'https://site.api.espn.com/apis/v2/sports';
+const F1API = 'https://api.jolpi.ca/ergast/f1';
+export const SPORT_PATHS = { nba: 'basketball/nba', mlb: 'baseball/mlb', ufc: 'mma/ufc' };
+ATTRIBUTION.espn = { name: 'ESPN', url: 'https://www.espn.com', text: 'Resultados y calendarios con datos públicos de ESPN' };
+ATTRIBUTION.jolpica = { name: 'Jolpica F1', url: 'https://github.com/jolpica/jolpica-f1', text: 'Datos de Fórmula 1 de Jolpica (Ergast)' };
+
+// Guarda en caché y, si no hay conexión, devuelve lo último que se descargó
+async function cached(key, maxAge, fn, force = false) {
+  const c = await cacheGet(key, maxAge);
+  if (c && c.fresh && !force) return { data: c.data, cachedAt: c.t };
+  try {
+    const data = await fn();
+    await cacheSet(key, data);
+    return { data, cachedAt: Date.now() };
+  } catch (err) {
+    if (c) return { data: c.data, cachedAt: c.t, offline: true };
+    throw err;
+  }
+}
+const ymd = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+const hexOk = (c) => (/^[0-9a-f]{6}$/i.test(c || '') ? '#' + c : '');
+
+function espnGame(e) {
+  const c = e.competitions?.[0] || {};
+  const side = (ha) => {
+    const x = (c.competitors || []).find((k) => k.homeAway === ha) || {};
+    const t = x.team || {};
+    const sc = typeof x.score === 'object' ? x.score?.displayValue : x.score;
+    return {
+      id: t.id, name: t.displayName || t.name || '?', short: t.abbreviation || '', color1: hexOk(t.color), color2: hexOk(t.alternateColor),
+      score: sc ?? '', winner: !!x.winner, record: x.records?.[0]?.summary || x.record?.[0]?.displayValue || '',
+      lines: (x.linescores || []).map((l) => l.displayValue ?? l.value),
+    };
+  };
+  const st = e.status?.type || c.status?.type || {};
+  return {
+    id: e.id, ts: e.date, state: st.state || 'pre', detail: st.shortDetail || st.detail || '', completed: !!st.completed,
+    home: side('home'), away: side('away'),
+    venue: c.venue?.fullName || '', city: [c.venue?.address?.city, c.venue?.address?.state].filter(Boolean).join(', '),
+    note: (c.notes || []).map((n) => n.headline).filter(Boolean).join(' · ') || c.series?.summary || '',
+    tv: [...new Set((c.broadcasts || []).flatMap((b) => b.names || []))].join(', '),
+  };
+}
+
+// Partidos de un día (NBA o MLB). Los días ya jugados se guardan más tiempo.
+export async function sportDay(sport, date, { force = false } = {}) {
+  const d = ymd(date);
+  const past = date < new Date(Date.now() - 36 * 3600e3);
+  return cached(`sd:${sport}:${d}`, past ? 7 * 864e5 : 5 * 60e3, async () => {
+    const j = await fetchJSON(`${ESPN}/${SPORT_PATHS[sport]}/scoreboard?dates=${d}`);
+    return (j.events || []).map(espnGame).sort((a, b) => a.ts.localeCompare(b.ts));
+  }, force);
+}
+
+// Tabla por conferencia / liga
+export async function sportStandings(sport, { force = false } = {}) {
+  return cached('ss:' + sport, 3 * 3600e3, async () => {
+    const j = await fetchJSON(`${ESPN2}/${SPORT_PATHS[sport]}/standings`);
+    return (j.children || []).map((g) => {
+      const rows = (g.standings?.entries || []).map((en) => {
+        const s = Object.fromEntries((en.stats || []).map((x) => [x.name, x]));
+        const v = (k) => s[k]?.displayValue ?? '';
+        return {
+          id: en.team?.id, name: en.team?.displayName || '', short: en.team?.abbreviation || '', color1: hexOk(en.team?.color), color2: hexOk(en.team?.alternateColor),
+          w: v('wins'), l: v('losses'), pct: v('winPercent'), gb: v('gamesBehind'), streak: v('streak'), seed: +(s.playoffSeed?.value || 0), wp: +(s.winPercent?.value || 0),
+        };
+      });
+      rows.sort((a, b) => (a.seed && b.seed ? a.seed - b.seed : b.wp - a.wp));
+      return { name: g.name, rows };
+    });
+  }, force);
+}
+
+// Partidos de un equipo (próximos y últimos)
+export async function sportTeamSchedule(sport, teamId, { force = false } = {}) {
+  return cached(`st:${sport}:${teamId}`, 30 * 60e3, async () => {
+    const base = `${ESPN}/${SPORT_PATHS[sport]}/teams/${teamId}/schedule`;
+    const [a, b] = await Promise.all([fetchJSON(base), fetchJSON(base + '?seasontype=3').catch(() => ({}))]);
+    const ev = [...(a.events || []), ...(b.events || [])].map(espnGame);
+    const uniq = [...new Map(ev.map((e) => [e.id, e])).values()];
+    return {
+      upcoming: uniq.filter((e) => e.state !== 'post').sort((x, y) => x.ts.localeCompare(y.ts)).slice(0, 5),
+      results: uniq.filter((e) => e.state === 'post').sort((x, y) => y.ts.localeCompare(x.ts)).slice(0, 5),
+    };
+  }, force);
+}
+
+// ---------- UFC ----------
+const UFC_METHOD = { Kotko: 'KO/TKO', 'KO/TKO': 'KO/TKO', Submission: 'Sumisión', Decision: 'Decisión', 'Unanimous Decision': 'Decisión unánime', 'Split Decision': 'Decisión dividida', 'Majority Decision': 'Decisión mayoritaria', DQ: 'Descalificación', 'No Contest': 'Sin resultado', Draw: 'Empate' };
+function ufcFight(c) {
+  const f = [...(c.competitors || [])].sort((a, b) => (a.order || 0) - (b.order || 0)).map((x) => ({
+    name: x.athlete?.displayName || '?', country: x.athlete?.flag?.alt || '', record: x.records?.[0]?.summary || '', winner: !!x.winner,
+  }));
+  const raw = (c.details || []).map((d) => d.type?.text || '').find((t) => /winner/i.test(t)) || '';
+  const m = raw.replace(/^.*winner\s*/i, '').trim();
+  const done = c.status?.type?.state === 'post';
+  return {
+    weight: c.type?.abbreviation || '', fighters: f, done,
+    method: UFC_METHOD[m] || m, round: done ? c.status?.period : null, clock: done ? c.status?.displayClock : '',
+    ts: c.date, rounds: c.format?.regulation?.periods || 3,
+  };
+}
+export async function ufcEvents({ force = false } = {}) {
+  const y = new Date().getFullYear();
+  const years = new Date().getMonth() >= 10 ? [y, y + 1] : [y];
+  return cached('ufc:' + years.join(','), 30 * 60e3, async () => {
+    const res = await Promise.all(years.map((yy) => fetchJSON(`${ESPN}/mma/ufc/scoreboard?dates=${yy}`).catch(() => ({}))));
+    if (!res.some((j) => j.events)) throw new Error('sin datos');
+    const ev = res.flatMap((j) => j.events || []).map((e) => {
+      const c0 = e.competitions?.[0] || {};
+      // la pelea estelar es la última de la cartelera: se pone primero
+      const fights = (e.competitions || []).map(ufcFight).reverse();
+      return {
+        id: e.id, name: e.name, ts: e.date, state: e.status?.type?.state || 'pre',
+        venue: c0.venue?.fullName || '', city: [c0.venue?.address?.city, c0.venue?.address?.state, c0.venue?.address?.country].filter(Boolean).join(', '),
+        fights,
+      };
+    });
+    return [...new Map(ev.map((e) => [e.id, e])).values()].sort((a, b) => a.ts.localeCompare(b.ts));
+  }, force);
+}
+
+// ---------- Fórmula 1 ----------
+const SESSIONS = { FirstPractice: 'Práctica 1', SecondPractice: 'Práctica 2', ThirdPractice: 'Práctica 3', SprintQualifying: 'Clasificación sprint', SprintShootout: 'Clasificación sprint', Sprint: 'Sprint', Qualifying: 'Clasificación' };
+const tsOf = (o) => (o?.date ? `${o.date}T${o.time || '00:00:00Z'}` : null);
+export async function f1Season({ force = false } = {}) {
+  return cached('f1:season', 6 * 3600e3, async () => {
+    const [cal, wins] = await Promise.all([
+      fetchJSON(`${F1API}/current.json`),
+      fetchJSON(`${F1API}/current/results/1.json?limit=40`).catch(() => ({})),
+    ]);
+    const winners = Object.fromEntries((wins.MRData?.RaceTable?.Races || []).map((r) => [r.round, r.Results?.[0]]));
+    return (cal.MRData?.RaceTable?.Races || []).map((r) => {
+      const w = winners[r.round];
+      return {
+        season: r.season, round: r.round, name: r.raceName, circuit: r.Circuit?.circuitName || '',
+        place: [r.Circuit?.Location?.locality, r.Circuit?.Location?.country].filter(Boolean).join(', '),
+        country: r.Circuit?.Location?.country || '', ts: tsOf(r), sprint: !!r.Sprint,
+        sessions: [...Object.entries(SESSIONS).filter(([k]) => r[k]).map(([k, label]) => ({ label, ts: tsOf(r[k]) })), { label: 'Carrera', ts: tsOf(r) }].sort((a, b) => (a.ts || '').localeCompare(b.ts || '')),
+        winner: w ? { name: `${w.Driver.givenName} ${w.Driver.familyName}`, team: w.Constructor?.name || '' } : null,
+      };
+    });
+  }, force);
+}
+// kind: results | qualifying | sprint
+export async function f1Results(season, round, kind = 'results') {
+  return (await cached(`f1:${kind}:${season}:${round}`, 7 * 864e5, async () => {
+    const j = await fetchJSON(`${F1API}/${season}/${round}/${kind}.json?limit=40`);
+    const race = j.MRData?.RaceTable?.Races?.[0];
+    const list = race?.Results || race?.QualifyingResults || race?.SprintResults || [];
+    return list.map((x) => ({
+      pos: x.positionText || x.position, name: `${x.Driver.givenName} ${x.Driver.familyName}`, code: x.Driver.code || '',
+      team: x.Constructor?.name || '', points: x.points || '', grid: x.grid || '',
+      time: x.Time?.time || x.Q3 || x.Q2 || x.Q1 || x.status || '', fastest: x.FastestLap?.rank === '1',
+    }));
+  })).data;
+}
+export async function f1Standings({ force = false } = {}) {
+  return cached('f1:standings', 3 * 3600e3, async () => {
+    const [d, c] = await Promise.all([
+      fetchJSON(`${F1API}/current/driverStandings.json?limit=40`),
+      fetchJSON(`${F1API}/current/constructorStandings.json?limit=40`),
+    ]);
+    const dl = d.MRData?.StandingsTable?.StandingsLists?.[0] || {};
+    const cl = c.MRData?.StandingsTable?.StandingsLists?.[0] || {};
+    return {
+      round: dl.round || '',
+      drivers: (dl.DriverStandings || []).map((x) => ({ pos: x.position || x.positionText, name: `${x.Driver.givenName} ${x.Driver.familyName}`, code: x.Driver.code || '', team: x.Constructors?.[0]?.name || '', points: x.points, wins: x.wins })),
+      teams: (cl.ConstructorStandings || []).map((x) => ({ pos: x.position || x.positionText, name: x.Constructor.name, points: x.points, wins: x.wins })),
+    };
+  }, force);
+}

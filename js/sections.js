@@ -1,6 +1,6 @@
 // Secciones: plataformas, fútbol, estadísticas, ajustes (respaldo) e importación de marcadores.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, readFile, download, relTime, hueOf, initials, coverHTML, vibrate } from './ui.js';
-import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed } from './store.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed, BROWSERS, browserChoices, openUrl, IS_IOS, IS_ANDROID } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
 import { ATTRIBUTION, searchInfo } from './api.js';
 import { db } from './db.js';
@@ -242,6 +242,15 @@ export function renderSettings(root) {
     <label class="toggle"><span>Reducir animaciones</span><input type="checkbox" id="motion" ${st.motion === 'off' ? 'checked' : ''}><i></i></label>
   </section>
 
+  <section class="panel" id="browser-panel">
+    <h3>🔗 Abrir los links con</h3>
+    <p class="muted small">Elige dónde se abren tus capítulos y links: dentro de la app o en el navegador que prefieras.</p>
+    <div class="br-list" role="radiogroup">${browserChoices().map((k, i) => { const b = BROWSERS[k]; const on = (st.browser || 'system') === k; return `<button class="br-opt ${on ? 'on' : ''}" role="radio" aria-checked="${on}" data-browser="${k}" style="--i:${i}">
+      <span class="br-emoji">${b.emoji}</span><span class="grow"><b>${esc(b.name)}</b>${b.desc ? `<small>${esc(b.desc)}</small>` : ''}</span><i class="br-radio"></i></button>`; }).join('')}</div>
+    ${IS_IOS || IS_ANDROID ? '<p class="note">Si eliges un navegador que no tienes instalado, el link se abre en el navegador normal.</p>' : '<p class="note">En el teléfono podrás elegir Chrome, Brave, Firefox, Safari y otros. En el computador se usa el navegador actual.</p>'}
+    <button class="btn block" id="br-test">${ICONS.play} Probar con un link</button>
+  </section>
+
   <section class="panel">
     <h3>🧩 Patrones de sitios</h3>
     ${patterns.length ? `<ul class="pattern-list">${patterns.map((p) => `<li><div class="grow"><b>${esc(p.host)}</b><small class="muted">${p.none ? 'Sin número de capítulo' : p.confirmed ? 'Patrón confirmado' : `Capítulo = número ${p.fromEnd + 1}° desde el final`}</small></div><button class="icon-btn xs" data-delpat="${esc(p.host)}" aria-label="Borrar patrón">${ICONS.close}</button></li>`).join('')}</ul>`
@@ -265,6 +274,8 @@ export function renderSettings(root) {
       <li>Datos de series: <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA 4.0)</li>
       <li>Datos de películas y series: <a href="https://es.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0)</li>
       <li>Fútbol: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a></li>
+      <li>NBA, MLB y UFC: datos públicos de <a href="https://www.espn.com" target="_blank" rel="noopener">ESPN</a></li>
+      <li>Fórmula 1: <a href="https://github.com/jolpica/jolpica-f1" target="_blank" rel="noopener">Jolpica F1</a> (Ergast)</li>
     </ul>
     <p class="small muted">Código abierto con licencia MIT.</p>
   </section>`;
@@ -309,6 +320,15 @@ export function renderSettings(root) {
     });
   };
   $$('[data-accent]', root).forEach((b) => b.onclick = async () => { await setPref('accent', b.dataset.accent); applyTheme(); vibrate(10); $$('[data-accent]', root).forEach((x) => x.classList.toggle('on', x === b)); });
+  $('#browser-panel .br-list', root).addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-browser]');
+    if (!b) return;
+    await setPref('browser', b.dataset.browser);
+    vibrate(8);
+    $$('[data-browser]', root).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+    toast(`Los links se abrirán con: ${BROWSERS[b.dataset.browser].name}`, { icon: BROWSERS[b.dataset.browser].emoji });
+  });
+  $('#br-test', root).onclick = () => openUrl('https://es.wikipedia.org/wiki/Biblioteca_de_Alejandr%C3%ADa');
   $('#amoled', root).onchange = async (e) => { await setPref('amoled', e.target.checked); applyTheme(); };
   $('#motion', root).onchange = async (e) => { await setPref('motion', e.target.checked ? 'off' : 'auto'); applyTheme(); };
   root.querySelector('.pattern-list')?.addEventListener('click', async (e) => {
