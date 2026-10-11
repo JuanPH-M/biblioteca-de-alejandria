@@ -162,6 +162,12 @@ export function renderFootball(root) {
 }
 
 // ======================= ESTADÍSTICAS =======================
+export function todayCount() {
+  const d = new Date();
+  const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return (S.settings.activity || {})[k] || 0;
+}
+
 export function streakDays() {
   const a = S.settings.activity || {};
   const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

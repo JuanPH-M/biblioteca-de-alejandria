@@ -1,14 +1,14 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
-import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled } from './ui.js';
+import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress } from './ui.js';
 import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
 import { PLATFORMS, STREAMING } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet } from './editor.js';
-import { renderPlatforms, renderPlatform, renderFootball, renderStats, renderSettings, renderImport, streakDays } from './sections.js';
+import { renderPlatforms, renderPlatform, renderFootball, renderStats, renderSettings, renderImport, streakDays, todayCount } from './sections.js';
 import { uid } from './db.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -28,6 +28,17 @@ function parseRoute() {
 }
 
 let lastRoute = null;
+let lastRouteKeyBefore = null;
+let lastDetailId = null; // para que la portada vuelva a su tarjeta al regresar
+const clearVTNames = () => $$('[style*="view-transition-name"]').forEach((el) => { el.style.viewTransitionName = ''; });
+// Al tocar una portada se marca para la transición compartida
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('.card-link, .c-cover, .sp-cover');
+  if (!link) return;
+  clearVTNames();
+  const cover = link.querySelector('.cover');
+  if (cover) cover.style.viewTransitionName = 'vt-cover';
+}, true);
 export async function render({ keepScroll = false } = {}) {
   const r = parseRoute();
   if (r.name === 'nuevo') { history.replaceState(null, '', '#/'); await render(); openEditor(); return; }
@@ -41,14 +52,27 @@ export async function render({ keepScroll = false } = {}) {
     futbol: renderFootball, stats: renderStats, ajustes: renderSettings, importar: renderImport,
   };
   const fn = map[r.name] || renderHome;
-  view.classList.remove('view-enter');
-  await fn(view);
-  hydrateIcons(view);
-  if (changed) {
-    void view.offsetWidth;
-    view.classList.add('view-enter');
-    window.scrollTo(0, 0);
-  } else if (keepScroll) window.scrollTo(0, scrollY);
+  const update = async () => {
+    view.classList.remove('view-enter');
+    await fn(view);
+    hydrateIcons(view);
+    if (changed) window.scrollTo(0, 0);
+    else if (keepScroll) window.scrollTo(0, scrollY);
+  };
+  const useVT = changed && document.startViewTransition && !reducedMotion() && lastRouteKeyBefore !== null;
+  lastRouteKeyBefore = routeKey;
+  if (useVT) {
+    const t = document.startViewTransition(update);
+    t.ready.catch(() => {});
+    // si el navegador no llega a pintar (pestaña en segundo plano), se salta la animación
+    const guard = setTimeout(() => t.skipTransition(), 450);
+    await t.updateCallbackDone.catch(() => {});
+    clearTimeout(guard);
+    t.finished.catch(() => {}).finally(clearVTNames);
+  } else {
+    await update();
+    if (changed) { void view.offsetWidth; view.classList.add('view-enter'); }
+  }
   const tab = { home: 'home', obra: 'home', plataformas: 'plataformas', plataforma: 'plataformas', futbol: 'futbol', stats: 'stats', ajustes: 'stats', importar: 'stats' }[r.name] || 'home';
   $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
 }
@@ -58,9 +82,8 @@ window.addEventListener('hashchange', () => render());
 export function cardHTML(w, i = 0) {
   const st = STATUSES[w.status];
   const plats = platformsOf(w);
-  const canPlus = w.type !== 'pelicula';
   const pct = w.total ? Math.min(100, (currentNumber(w) / w.total) * 100) : 0;
-  return `<article class="card" data-id="${w.id}" style="--i:${Math.min(i, 20)}">
+  return `<article class="card ${w.favorite ? 'is-fav' : ''}" data-id="${w.id}" style="--i:${Math.min(i, 20)};--sc:${st?.color}">
     <a href="#/obra/${w.id}" class="card-link" aria-label="${esc(w.title)}">
       ${coverHTML(w)}
       <div class="card-badges">
@@ -75,23 +98,10 @@ export function cardHTML(w, i = 0) {
       <div class="card-meta"><span class="sdot" style="--c:${st?.color}"></span><span>${esc(statusLabel(w.status, w.type))}</span></div>
       <div class="card-row">
         <span class="card-prog" data-prog>${esc(progressLabel(w))}</span>
-        ${canPlus ? `<button class="card-plus" data-plus="${w.id}" aria-label="Sumar uno">+1</button>` : ''}
+        ${w.rating ? `<span class="card-stars" aria-label="${w.rating} estrellas">★ ${w.rating}</span>` : ''}
       </div>
     </div>
   </article>`;
-}
-
-export async function quickPlus(btn) {
-  const w = getWork(btn.dataset.plus);
-  if (!w) return;
-  vibrate(12);
-  await changeProgress(w, 1);
-  const card = btn.closest('.card');
-  const prog = card?.querySelector('[data-prog]');
-  rollNumber(prog, progressLabel(w), 1);
-  floatText(btn, '+1');
-  if (w.seasonJump) { toast(`${w.title}: empieza la temporada ${w.seasonJump}`, { icon: '📺' }); delete w.seasonJump; }
-  if (w.justFinished) { delete w.justFinished; finishPrompt(w); }
 }
 
 function finishPrompt(w) {
@@ -101,12 +111,6 @@ function finishPrompt(w) {
     },
   });
 }
-
-// Delegación global: botones +1 de las tarjetas
-document.addEventListener('click', (e) => {
-  const plus = e.target.closest('[data-plus]');
-  if (plus) { e.preventDefault(); quickPlus(plus); }
-});
 
 // ---------- biblioteca ----------
 function continueList() {
@@ -120,11 +124,15 @@ async function renderHome(root) {
   const backupDays = S.settings.lastBackup ? Math.floor((Date.now() - S.settings.lastBackup) / 864e5) : null;
   const showBackup = total >= 3 && (backupDays == null || backupDays > 14) && !(S.settings.backupSnooze > Date.now());
   const cont = continueList();
+  const [spot, ...rest] = cont;
+  const h = new Date().getHours();
+  const hello = h < 5 ? 'Buenas noches' : h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const today = todayCount();
   root.innerHTML = `
   <header class="topbar">
     <div class="brand">
       <img src="icons/icon.svg" alt="" width="38" height="38">
-      <div><h1>Biblioteca de Alejandría</h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${streak ? ` · 🔥 racha de ${streak} ${streak === 1 ? 'día' : 'días'}` : ''}</p></div>
+      <div><h1>${hello} <span class="wave">👋</span></h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}${streak ? ` · <span class="flame">🔥</span> ${streak} ${streak === 1 ? 'día' : 'días'}` : ''}</p></div>
     </div>
     <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
   </header>
@@ -134,22 +142,24 @@ async function renderHome(root) {
     <input id="q" type="search" placeholder="Buscar por nombre…" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search">
     <button class="paste-btn" id="paste-btn">${ICONS.link}<span>Pegar link</span></button>
   </div>
-  ${cont.length && !f.q ? `
+  ${spot && !f.q ? spotlightHTML(spot) : ''}
+  ${total >= 2 && !f.q ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>Deja que la suerte elija qué leer o ver</small></span>${ICONS.sparkle}</button>` : ''}
+  ${rest.length && !f.q ? `
   <section class="continue">
     <div class="sec-head"><h2>Continuar</h2><span class="muted small">${cont.length} en curso</span></div>
     <div class="carousel" id="carousel">
-      ${cont.map((w) => { const t = continueTarget(w); return `
-        <div class="c-item" data-id="${w.id}">
-          <a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}</a>
+      ${rest.map((w, i) => { const t = continueTarget(w); const pct = progressPct(w); return `
+        <div class="c-item" data-id="${w.id}" style="--i:${i}">
+          <a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}${pct != null ? `<span class="c-bar"><i style="width:${pct}%"></i></span>` : ''}</a>
           <div class="c-title">${esc(w.title)}</div>
           <div class="c-row"><span class="muted small">${esc(progressLabel(w))}</span>
-          ${t ? `<button class="c-go" data-continue="${w.id}" aria-label="Continuar">${ICONS.play}</button>` : `<button class="c-go ghost" data-plus="${w.id}" aria-label="Sumar uno">+1</button>`}</div>
+          ${t ? `<button class="c-go" data-continue="${w.id}" aria-label="Continuar">${ICONS.play}</button>` : ''}</div>
         </div>`; }).join('')}
     </div>
   </section>` : ''}
   <div class="${total ? '' : 'hidden'}">
   <div class="chips scroll-x" id="type-chips" role="tablist">
-    ${[['all', 'Todo'], ...Object.entries(TYPES).map(([k, t]) => [k, t.label])].map(([k, l]) => `<button class="chip ${f.type === k ? 'on' : ''}" data-type="${k}">${l}<em>${k === 'all' ? total : S.works.filter((w) => w.type === k).length}</em></button>`).join('')}
+    ${[['all', '✨ Todo'], ...Object.entries(TYPES).map(([k, t]) => [k, `${t.emoji} ${t.label}`])].map(([k, l]) => `<button class="chip ${f.type === k ? 'on' : ''}" data-type="${k}">${l}<em>${k === 'all' ? total : S.works.filter((w) => w.type === k).length}</em></button>`).join('')}
   </div>
   <div class="filter-row">
     <label class="select"><select id="f-status" aria-label="Estado">
@@ -191,7 +201,129 @@ async function renderHome(root) {
     renderGrid();
   };
   root.addEventListener('click', onContinueClick);
+  $('#next-pick', root)?.addEventListener('click', openRoulette);
+  // al volver del detalle, la portada regresa a su tarjeta
+  if (lastDetailId) {
+    const back = root.querySelector(`[data-id="${lastDetailId}"] .cover`);
+    if (back && document.startViewTransition) back.style.viewTransitionName = 'vt-cover';
+    lastDetailId = null;
+  }
 }
+
+function progressPct(w) {
+  if (w.type === 'serie') { const tot = seriesTotals(w); return tot ? Math.round((tot.seen / tot.total) * 100) : null; }
+  return w.total ? Math.min(100, Math.round((currentNumber(w) / w.total) * 100)) : null;
+}
+
+// Tarjeta grande con la obra que estás siguiendo
+function spotlightHTML(w) {
+  const t = continueTarget(w);
+  const pct = progressPct(w);
+  const C = 2 * Math.PI * 26;
+  return `<section class="spotlight" data-id="${w.id}">
+    <div class="sp-bg">${w.cover ? `<img src="${esc(w.cover)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
+    <a href="#/obra/${w.id}" class="sp-cover" aria-label="${esc(w.title)}">${coverHTML(w)}</a>
+    <div class="sp-info">
+      <span class="sp-kicker">${TYPES[w.type].reading ? '📖 Sigues leyendo' : '📺 Sigues viendo'}</span>
+      <h2>${esc(w.title)}</h2>
+      <div class="sp-meta">
+        ${pct != null ? `<svg class="ring" viewBox="0 0 60 60" aria-label="${pct}%"><circle cx="30" cy="30" r="26" class="ring-bg"/><circle cx="30" cy="30" r="26" class="ring-fg" style="--len:${C};--off:${C * (1 - pct / 100)}"/><text x="30" y="35" text-anchor="middle">${pct}%</text></svg>` : ''}
+        <div><b>${esc(progressLabel(w, false))}</b><small>${relTime(w.lastOpened || w.updatedAt)}</small></div>
+      </div>
+      <div class="sp-actions">
+        ${t ? `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} Continuar${t.next ? ` · ${TYPES[w.type].unit} ${t.next}` : ''}</button>` : `<a class="btn primary sm" href="#/obra/${w.id}">${ICONS.edit} Registrar avance</a>`}
+      </div>
+    </div>
+  </section>`;
+}
+
+// ---------- ¿Qué sigue? (ruleta) ----------
+function openRoulette() {
+  const pool = (kind) => S.works.filter((w) => ['pendiente', 'viendo', 'emision', 'pausado'].includes(w.status) && (kind === 'all' || (kind === 'leer' ? TYPES[w.type].reading : !TYPES[w.type].reading)));
+  let kind = 'all';
+  const s = openSheet(`<h3 class="sheet-title center">🎲 ¿Qué sigue?</h3>
+    <div class="seg mini3" id="rl-kind"><button class="on" data-k="all">Todo</button><button data-k="leer">Leer</button><button data-k="ver">Ver</button></div>
+    <div class="slot"><div class="slot-reel" id="rl-reel"></div><div class="slot-glow"></div></div>
+    <div class="rl-result" id="rl-result"><p class="muted small center">Toca girar y deja que la suerte decida.</p></div>
+    <div class="row-btns"><button class="btn primary lg" id="rl-spin">🎰 Girar</button></div>`, { cls: 'roulette' });
+  const reel = $('#rl-reel', s.el), result = $('#rl-result', s.el);
+  const H = 186;
+  let spinning = false;
+  const fill = (list) => { reel.style.transition = 'none'; reel.style.transform = 'translateY(0)'; reel.innerHTML = list.map((w) => `<div class="slot-item">${coverHTML(w)}</div>`).join(''); };
+  const preview = () => { const p = pool(kind); fill(p.length ? p.slice(0, 1) : []); result.innerHTML = p.length ? `<p class="muted small center">${p.length} ${p.length === 1 ? 'opción' : 'opciones'} en la ruleta</p>` : '<p class="muted small center">No hay obras pendientes o en curso de este tipo.</p>'; };
+  preview();
+  $('#rl-kind', s.el).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-k]');
+    if (!b || spinning) return;
+    kind = b.dataset.k;
+    $$('#rl-kind button', s.el).forEach((x) => x.classList.toggle('on', x === b));
+    preview();
+  });
+  $('#rl-spin', s.el).onclick = () => {
+    const p = pool(kind);
+    if (!p.length || spinning) return;
+    spinning = true;
+    const pick = p[Math.floor(Math.random() * p.length)];
+    const seq = [];
+    const rounds = Math.max(18, p.length * 3);
+    for (let i = 0; i < rounds; i++) seq.push(p[Math.floor(Math.random() * p.length)]);
+    seq.push(pick);
+    fill(seq);
+    result.innerHTML = '<p class="muted small center rl-wait">Girando…</p>';
+    vibrate(10);
+    void reel.offsetHeight;
+    const dur = reducedMotion() ? 0 : 2600;
+    reel.style.transition = dur ? `transform ${dur}ms cubic-bezier(.12,.8,.18,1)` : 'none';
+    reel.style.transform = `translateY(${-(seq.length - 1) * H}px)`;
+    let ticks = 0;
+    const tick = setInterval(() => { if (++ticks < 14) vibrate(4); else clearInterval(tick); }, 120);
+    setTimeout(() => {
+      spinning = false;
+      clearInterval(tick);
+      vibrate(30);
+      const r = reel.parentElement.getBoundingClientRect();
+      confetti(r.left + r.width / 2, r.top + r.height / 2, 30);
+      result.innerHTML = `<div class="rl-pick"><span class="badge type-${pick.type}">${TYPES[pick.type].emoji} ${TYPES[pick.type].label}</span><h3>${esc(pick.title)}</h3><p class="muted small">${esc(progressLabel(pick, false))} · ${esc(statusLabel(pick.status, pick.type))}</p>
+        <a class="btn primary block" href="#/obra/${pick.id}" id="rl-open">Vamos con esta</a></div>`;
+      $('#rl-open', s.el).onclick = (e) => { e.preventDefault(); go('#/obra/' + pick.id); };
+      $('#rl-spin', s.el).textContent = '🎰 Girar otra vez';
+      $('#rl-spin', s.el).classList.remove('primary');
+    }, dur + 50);
+  };
+}
+
+// ---------- acciones rápidas (mantener presionada una tarjeta) ----------
+function openQuickActions(el) {
+  const w = getWork(el.dataset.id);
+  if (!w) return;
+  const t = continueTarget(w);
+  const s = openSheet(`
+    <div class="qa-head">${coverHTML(w, 'sm')}<div class="grow"><span class="badge type-${w.type}">${TYPES[w.type].emoji} ${TYPES[w.type].label}</span><h3>${esc(w.title)}</h3><p class="muted small">${esc(progressLabel(w, false))}</p></div></div>
+    <div class="field"><span>Cambiar estado</span><div class="chips wrap" id="qa-status">
+      ${Object.entries(STATUSES).map(([k, st]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
+    </div></div>
+    <div class="qa-grid">
+      <button class="qa-btn ${w.favorite ? 'on' : ''}" id="qa-fav">${ICONS.heart}<span>${w.favorite ? 'Quitar favorito' : 'Favorito'}</span></button>
+      <button class="qa-btn" id="qa-open">${ICONS.eye}<span>Ver detalle</span></button>
+      <button class="qa-btn" id="qa-edit">${ICONS.edit}<span>Editar</span></button>
+      ${t ? `<button class="qa-btn" id="qa-go">${ICONS.play}<span>Continuar</span></button>` : ''}
+    </div>`);
+  $('#qa-status', s.el).addEventListener('click', async (e) => {
+    const c = e.target.closest('[data-status]');
+    if (!c) return;
+    w.status = c.dataset.status;
+    await saveWork(w);
+    $$('#qa-status .chip', s.el).forEach((x) => x.classList.toggle('on', x === c));
+    vibrate(10);
+    if (w.status === 'terminado') { const r = c.getBoundingClientRect(); confetti(r.left + r.width / 2, r.top); }
+    setTimeout(() => { s.close(); render({ keepScroll: true }); }, 350);
+  });
+  $('#qa-fav', s.el).onclick = async () => { w.favorite = !w.favorite; await saveWork(w); vibrate(12); s.close(); render({ keepScroll: true }); toast(w.favorite ? 'Agregada a favoritos' : 'Quitada de favoritos', { icon: w.favorite ? '❤️' : '🤍' }); };
+  $('#qa-open', s.el).onclick = () => go('#/obra/' + w.id);
+  $('#qa-edit', s.el).onclick = () => { s.close(); whenSettled(() => openEditor(w)); };
+  $('#qa-go', s.el)?.addEventListener('click', () => { s.close(); doContinue(w); });
+}
+onLongPress(document, '.card, .c-item, .spotlight', openQuickActions);
 
 function renderGrid() {
   const grid = $('#grid');
@@ -302,6 +434,17 @@ function counterHTML(w) {
   </section>`;
 }
 
+// Celebraciones al llegar a números redondos
+function milestone(w, anchor) {
+  const n = w.type === 'serie' ? (seriesTotals(w)?.seen ?? w.progress.watched ?? 0) : currentNumber(w);
+  if (!n || n % 10 !== 0) return;
+  const r = anchor.getBoundingClientRect();
+  const big = n % 50 === 0;
+  confetti(r.left + r.width / 2, r.top, big ? 50 : 18);
+  vibrate(big ? [20, 40, 20] : 20);
+  toast(`${big ? '🏆' : '🎉'} ¡${n} ${TYPES[w.type].unitLong}s de ${w.title}!`);
+}
+
 function seriesTotalText(w) {
   const tot = seriesTotals(w);
   if (tot) return `${tot.seen} de ${tot.total} episodios vistos · ${w.seasons.length} ${w.seasons.length === 1 ? 'temporada' : 'temporadas'}`;
@@ -406,6 +549,8 @@ async function renderDetail(root, id) {
   </div>`;
 
   tilt($('#hero-cover', root), 16);
+  lastDetailId = w.id;
+  if (document.startViewTransition) $('#hero-cover .cover', root).style.viewTransitionName = 'vt-cover';
   $('#back', root).onclick = () => (history.length > 1 && lastRouteWasInternal ? history.back() : go('#/'));
   $('#edit', root).onclick = () => openEditor(w);
   $('#fav', root).onclick = async (e) => {
@@ -439,7 +584,7 @@ async function renderDetail(root, id) {
       refreshSeries(w, root, d);
       if (w.seasonJump) { toast(`¡Empieza la temporada ${w.seasonJump}!`, { icon: '📺' }); delete w.seasonJump; }
     } else rollNumber($('#num', root), currentNumber(w), d);
-    if (d > 0) floatText(b, '+1');
+    if (d > 0) { floatText(b, '+1'); milestone(w, b); }
     refreshContinue(w, root);
     updatePbar(w, root);
     if (w.justFinished) { delete w.justFinished; finishPrompt(w); }
@@ -578,6 +723,21 @@ function editNumber(w, btn, root) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
   input.addEventListener('blur', () => finish(true));
 }
+
+// Parallax suave en el encabezado del detalle
+let parRaf = 0;
+window.addEventListener('scroll', () => {
+  if (parRaf || reducedMotion()) return;
+  parRaf = requestAnimationFrame(() => {
+    parRaf = 0;
+    const bg = document.querySelector('.hero-bg');
+    if (!bg) return;
+    const y = Math.min(window.scrollY, 400);
+    bg.style.transform = `translateY(${y * 0.45}px)`;
+    const main = document.querySelector('.hero-main');
+    if (main) { main.style.transform = `translateY(${y * 0.12}px)`; main.style.opacity = String(Math.max(0.2, 1 - y / 380)); }
+  });
+}, { passive: true });
 
 let lastRouteWasInternal = false;
 window.addEventListener('hashchange', () => { lastRouteWasInternal = true; });

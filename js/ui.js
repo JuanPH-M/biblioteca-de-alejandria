@@ -162,6 +162,42 @@ export function confetti(x = innerWidth / 2, y = innerHeight / 2, n = 28) {
   }
 }
 
+// Onda al tocar botones y chips
+document.addEventListener('pointerdown', (e) => {
+  const el = e.target.closest('.btn, .chip, .icon-btn, .cbtn, .fab, .plat-tile, .paste-btn, .qa-btn, .next-pick, .seg button');
+  if (!el || reducedMotion()) return;
+  const r = el.getBoundingClientRect();
+  const d = Math.max(r.width, r.height) * 2.2;
+  const rip = document.createElement('span');
+  rip.className = 'ripple';
+  rip.setAttribute('aria-hidden', 'true');
+  rip.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`;
+  el.prepend(rip);
+  setTimeout(() => rip.remove(), 650);
+}, { passive: true });
+
+// Mantener presionado (o clic derecho) sobre un elemento
+export function onLongPress(root, selector, cb) {
+  let timer = 0, start = null, fired = false;
+  const fire = (el) => { if (fired) return; fired = true; vibrate(25); el.classList.add('pressed'); setTimeout(() => el.classList.remove('pressed'), 300); cb(el); };
+  root.addEventListener('pointerdown', (e) => {
+    const el = e.target.closest(selector);
+    fired = false;
+    if (!el || e.button > 0) return;
+    start = [e.clientX, e.clientY];
+    el.classList.add('holding');
+    timer = setTimeout(() => { el.classList.remove('holding'); fire(el); }, 480);
+  });
+  const cancel = () => { clearTimeout(timer); start = null; $$('.holding').forEach((x) => x.classList.remove('holding')); };
+  root.addEventListener('pointermove', (e) => { if (start && Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 10) cancel(); }, { passive: true });
+  root.addEventListener('pointerup', cancel);
+  root.addEventListener('pointercancel', cancel);
+  root.addEventListener('scroll', cancel, { passive: true, capture: true });
+  root.addEventListener('contextmenu', (e) => { const el = e.target.closest(selector); if (!el) return; e.preventDefault(); cancel(); fire(el); });
+  // evita que el toque largo abra la obra al soltar
+  root.addEventListener('click', (e) => { if (fired && e.target.closest(selector)) { e.preventDefault(); e.stopPropagation(); fired = false; } }, true);
+}
+
 // Inclinación 3D al tocar/mover el puntero
 export function tilt(el, max = 12) {
   // solo con mouse: en el celular el toque deformaba la portada
