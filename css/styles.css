@@ -1006,3 +1006,34 @@ body.no-scroll #toasts { bottom: auto; top: calc(var(--safe-t) + 12px); }
 .go-search { display: block; margin: 6px 16px 0; text-align: center; width: calc(100% - 32px); font-weight: 600; opacity: .85; }
 .chap-url { margin-top: 10px; }
 .chap-url small { line-height: 1.35; }
+
+/* ===================== v1.7 ===================== */
+/* Contador: números sólidos (sin degradado recortado) y rodillo limpio */
+.num, .ep-big b, .ep-big .num { background: none !important; -webkit-text-fill-color: currentColor !important; color: #fff; text-shadow: 0 4px 24px var(--accent-glow); }
+.num.rolling, .ep-big b.rolling { display: inline-grid; overflow: hidden; vertical-align: bottom; padding: 0 2px; }
+.rn { grid-area: 1 / 1; display: block; }
+.rn-old.up { animation: rnOutUp .34s cubic-bezier(.4, 0, .2, 1) forwards; }
+.rn-cur.up { animation: rnInUp .34s cubic-bezier(.2, .8, .2, 1) both; }
+.rn-old.down { animation: rnOutDown .34s cubic-bezier(.4, 0, .2, 1) forwards; }
+.rn-cur.down { animation: rnInDown .34s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes rnOutUp { to { transform: translateY(-75%); opacity: 0; filter: blur(2px); } }
+@keyframes rnInUp { from { transform: translateY(75%); opacity: 0; filter: blur(2px); } }
+@keyframes rnOutDown { to { transform: translateY(75%); opacity: 0; filter: blur(2px); } }
+@keyframes rnInDown { from { transform: translateY(-75%); opacity: 0; filter: blur(2px); } }
+.num.bump, .ep-big .bump { animation: numPop .4s var(--spring); }
+@keyframes numPop { 30% { transform: scale(1.18); text-shadow: 0 0 30px var(--accent-glow); } }
+.cbtn.plus:active span { display: inline-block; transform: scale(1.15); }
+
+/* Hoja "¿Hasta dónde leíste?" */
+.ci-head { display: flex; gap: 12px; align-items: center; }
+.ci-head small { color: var(--accent-2); font-weight: 700; font-size: 12px; }
+.ci-head h3 { font-size: 18px; margin-top: 2px; }
+.ci-q { text-align: center; font-weight: 750; font-size: 16px; margin: 16px 0 10px; }
+.ci-stepper { display: grid; grid-template-columns: 64px 1fr 64px; gap: 12px; align-items: center; }
+.ci-stepper .cbtn { height: 64px; font-size: 28px; }
+.ci-val { display: grid; justify-items: center; gap: 2px; }
+.ci-val input { text-align: center; font-size: 40px !important; font-weight: 850; min-height: 64px; padding: 4px; border-radius: 18px; font-variant-numeric: tabular-nums; }
+.ci-val small { color: var(--muted); font-size: 12px; }
+.ci-quick { justify-content: center; margin: 12px 0 2px; flex-wrap: wrap; padding: 0; }
+.ci-hint { display: block; font-size: 12px; line-height: 1.4; }
+input.bump { animation: numPop .35s var(--spring); }

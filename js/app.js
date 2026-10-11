@@ -1,14 +1,14 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
-import { PLATFORMS, STREAMING } from './links.js';
+import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, applyLinkToWork, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
+import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
 import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp } from './sections.js';
 import { renderFootball } from './football.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.6.2';
+export const APP_VERSION = '1.7.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -395,26 +395,100 @@ export async function doContinue(w, mode = 'next') {
   // primero se abre el link (iPhone lo exige en el mismo toque) y después se guarda
   if (mode === 'list' && t.list) {
     openUrl(t.list);
-    toast('Abriendo la lista de capítulos', { icon: '📚' });
   } else if (mode === 'last' && t.last) {
     openUrl(t.last.url);
-    toast(t.last.saved ? 'Abriendo el último link que guardaste' : `Abriendo ${u} ${t.last.n} (último visto)`, { icon: '↺' });
   } else {
     openUrl(t.list && !t.next ? t.list : t.url);
   }
   w.lastOpened = Date.now();
   saveWork(w, { touch: false });
-  if (mode !== 'next') return;
-  if (t.next != null && t.next > currentNumber(w)) {
-    toast(`Abriendo ${TYPES[w.type].unitLong} ${t.next}`, {
-      icon: '📖', action: `Marcar ${TYPES[w.type].unit} ${t.next}`, onAction: async () => {
-        await setProgress(w, w.type === 'serie' ? { episode: t.next } : { chapter: t.next });
-        await import('./store.js').then((m) => m.logActivity(1));
-        render({ keepScroll: true });
-        toast(`${w.title}: ${progressLabel(w)}`, { icon: '✅' });
-      },
-    });
-  }
+  setPendingRead(w, t, mode);
+  toast(`Al volver te pregunto hasta qué ${u} llegaste`, { icon: '📝', timeout: 2500 });
+}
+
+// ---------- ¿Hasta dónde leíste? (al volver a la app) ----------
+// La app no puede ver lo que haces dentro de otra página, así que al regresar
+// pregunta hasta qué capítulo llegaste y guarda el link donde quedaste.
+const PENDING_KEY = 'ba-pending-read';
+function setPendingRead(w, t, mode) {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify({ id: w.id, at: Date.now(), from: currentNumber(w), expect: mode === 'next' && t.next ? t.next : null, mode })); } catch { /* sin almacenamiento */ }
+}
+function takePendingRead() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
+    if (!p || Date.now() - p.at < 12000) return null; // volvió enseguida: se pregunta la próxima vez
+    localStorage.removeItem(PENDING_KEY);
+    return Date.now() - p.at < 24 * 3600e3 ? p : null;
+  } catch { return null; }
+}
+function checkReturn() {
+  const p = takePendingRead();
+  const w = p && getWork(p.id);
+  if (w && !document.querySelector('.sheet-wrap')) openCheckIn(w, p);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(checkReturn, 400); });
+
+export function openCheckIn(w, p = { mode: 'manual' }) {
+  const t = TYPES[w.type];
+  const cur = currentNumber(w);
+  let val = p.expect ?? (p.mode === 'last' || p.mode === 'manual' ? cur : cur + 1);
+  if (val < cur) val = cur;
+  const s = openSheet(`
+    <div class="ci-head">${coverHTML(w, 'xs')}<div class="grow"><small>${p.mode === 'manual' ? 'Registrar avance' : `Volviste de ${t.reading ? 'leer' : 'ver'}`}</small><h3>${esc(w.title)}</h3></div></div>
+    <p class="ci-q">¿Hasta qué ${t.unitLong} llegaste?</p>
+    <div class="ci-stepper">
+      <button class="cbtn minus" data-ci="-1" aria-label="Uno menos">−</button>
+      <div class="ci-val"><input id="ci-n" type="number" inputmode="decimal" min="0" step="any" value="${val}" aria-label="${t.unitLong}"><small>antes: ${t.unit} ${cur}</small></div>
+      <button class="cbtn plus" data-ci="1" aria-label="Uno más">+</button>
+    </div>
+    <div class="chips center ci-quick">${[1, 2, 5, 10].map((n) => `<button class="chip" data-add="${n}">+${n}</button>`).join('')}</div>
+    <div class="field"><span>Link del ${t.unitLong} donde quedaste (opcional)</span>
+      <div class="field-row"><input id="ci-url" type="url" inputmode="url" placeholder="https://…" value="${esc(p.url || '')}"><button class="btn sm" id="ci-paste">Pegar</button></div>
+      <small class="muted ci-hint">Así <b>Último visto</b> abrirá justo ese ${t.unitLong}. Si el link trae el número, el contador se ajusta solo.</small>
+    </div>
+    <div class="row-btns"><button class="btn ghost" id="ci-no">${p.mode === 'manual' ? 'Cancelar' : 'No leí nada'}</button><button class="btn primary" id="ci-save">Guardar</button></div>`, { cls: 'checkin' });
+  const input = $('#ci-n', s.el);
+  const setVal = (v, dir) => {
+    const n = Math.max(0, Math.round(v * 100) / 100);
+    input.value = n;
+    input.classList.remove('bump'); void input.offsetWidth; input.classList.add('bump');
+    vibrate(6);
+    void dir;
+  };
+  s.el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ci]');
+    if (b) setVal((parseFloat(input.value) || 0) + +b.dataset.ci, +b.dataset.ci);
+    const a = e.target.closest('[data-add]');
+    if (a) setVal(Math.max(cur, parseFloat(input.value) || 0) + +a.dataset.add, 1);
+  });
+  const urlIn = $('#ci-url', s.el);
+  const readUrl = () => {
+    const parsed = urlIn.value.trim() ? parseLink(urlIn.value.trim(), S.patterns) : null;
+    if (parsed?.chapter != null && parsed.chapter > (parseFloat(input.value) || 0)) setVal(parsed.chapter, 1);
+    return parsed;
+  };
+  urlIn.addEventListener('input', debounce(readUrl, 250));
+  $('#ci-paste', s.el).onclick = async () => {
+    try { urlIn.value = (await navigator.clipboard.readText()).trim(); readUrl(); }
+    catch { urlIn.focus(); toast('Mantén presionado el campo y elige "Pegar".'); }
+  };
+  if (p.url) readUrl();
+  $('#ci-no', s.el).onclick = () => s.close();
+  $('#ci-save', s.el).onclick = async () => {
+    const parsed = readUrl();
+    let n = parseFloat(input.value);
+    if (parsed && parsed.platform === 'web') await applyLinkToWork(w, parsed);
+    if (!isNaN(n) && n !== currentNumber(w)) await setProgress(w, w.type === 'serie' ? { episode: Math.round(n) } : { chapter: n });
+    if (w.status === 'pendiente' && n > 0) { w.status = 'viendo'; await saveWork(w); }
+    s.close();
+    vibrate(15);
+    const gained = currentNumber(w) - cur;
+    if (gained > 0) confetti(innerWidth / 2, innerHeight * 0.45, Math.min(40, 10 + gained * 2));
+    toast(gained > 0 ? `${w.title}: +${gained} → ${progressLabel(w)}` : `${w.title}: ${progressLabel(w)}`, { icon: '✅' });
+    if (w.total && currentNumber(w) >= w.total && w.status !== 'terminado') finishPrompt(w);
+    render({ keepScroll: true });
+  };
+  setTimeout(() => { input.focus(); input.select(); }, 380);
 }
 
 // ---------- detalle ----------
@@ -492,7 +566,7 @@ function seriesTotalText(w) {
 function refreshSeries(w, root, dir) {
   const sn = w.progress.season || 1, eps = seasonEpisodes(w);
   rollNumber($('#num', root), w.progress.episode || 0, dir);
-  if ($('#season-num', root).textContent !== String(sn)) { rollNumber($('#season-num', root), sn, dir); }
+  rollNumber($('#season-num', root), sn, dir);
   $('#season-num2', root).textContent = sn;
   $('#ep-of', root).textContent = eps ? `de ${eps} episodios en la temporada ${sn}` : 'toca el número del episodio para editarlo';
   const bar = $('.series-panel .pbar', root);
@@ -552,7 +626,7 @@ async function renderDetail(root, id) {
       </div>
     </div>
 
-    ${target ? `<div class="go-row" id="go-row">${goRowHTML(w, target)}</div>${target.list && target.listGuessed && target.search && target.search !== target.list ? `<button class="link-btn small go-search" id="go-search">🔎 ¿No es la página de capítulos? Buscar la obra en el sitio</button>` : ''}` : ''}
+    ${target ? `<div class="go-row" id="go-row">${goRowHTML(w, target)}</div><button class="link-btn small go-search" id="go-checkin">📝 ¿Leíste más? Registrar hasta dónde llegaste</button>${target.list && target.listGuessed && target.search && target.search !== target.list ? `<button class="link-btn small go-search" id="go-search">🔎 ¿No es la página de capítulos? Buscar la obra en el sitio</button>` : ''}` : ''}
 
     ${counterHTML(w)}
 
@@ -593,6 +667,7 @@ async function renderDetail(root, id) {
     await saveWork(w);
   };
   $('#go-row', root)?.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) doContinue(w, b.dataset.go); });
+  $('#go-checkin', root)?.addEventListener('click', () => openCheckIn(w, { mode: 'manual' }));
   $('#go-search', root)?.addEventListener('click', () => { const t = continueTarget(w); if (t?.search) openUrl(t.search); });
   $('#more', root)?.addEventListener('click', (e) => { $('#synopsis').classList.toggle('clamp'); e.target.textContent = $('#synopsis').classList.contains('clamp') ? 'Ver más' : 'Ver menos'; });
 
@@ -801,6 +876,7 @@ async function start() {
   addEventListener('online', updateOnline);
   addEventListener('offline', updateOnline);
   handleShareTarget();
+  setTimeout(checkReturn, 900);
   registerSW();
 }
 

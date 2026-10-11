@@ -3,7 +3,7 @@ import { $, $$, esc, openSheet, whenSettled, toast, debounce, imageToDataURL, IC
 import { S, TYPES, STATUSES, TRACK_ONLY, statusLabel, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
 import { PLATFORMS, STREAMING, parseLink, nextChapterUrl, KNOWN_SITES } from './links.js';
 import { searchInfo, ATTRIBUTION, tvmazeSeasons } from './api.js';
-import { render, go } from './app.js';
+import { render, go, openCheckIn } from './app.js';
 
 // ---------- análisis visual de un link ----------
 // Devuelve HTML que explica qué se reconoció y permite elegir el número de capítulo.
@@ -136,6 +136,8 @@ export function openPasteSheet({ work = null, url = '' } = {}) {
         });
       } else toast(res ? `${w.title}: ${progressLabel(w)}` : `Link guardado en ${w.title}`, { icon: '✅' });
       if (!work) go('#/obra/' + w.id); else render({ keepScroll: true });
+      // el link no dice el capítulo: se pregunta hasta dónde llegaste
+      if (parsed.chapter == null && parsed.platform === 'web' && !TRACK_ONLY.includes(w.type)) whenSettled(() => setTimeout(() => openCheckIn(w, { mode: 'manual' }), 450));
     } else if (e.target.closest('#pl-new')) {
       const p = parsed;
       s.close();
