@@ -147,6 +147,32 @@ export function openPasteSheet({ work = null, url = '' } = {}) {
   else setTimeout(() => input.focus(), 350);
 }
 
+const TYPE_HINTS = {
+  manhwa: 'Ej.: Solo Leveling…', manga: 'Ej.: One Piece…', anime: 'Ej.: Frieren…', serie: 'Ej.: Stranger Things…', pelicula: 'Ej.: Interestelar…',
+};
+const TYPE_DESC = {
+  manhwa: 'Cómics coreanos', manga: 'Cómics japoneses', anime: 'Series animadas', serie: 'Temporadas y episodios', pelicula: 'Para ver de una',
+};
+
+// ---------- hoja: ¿Qué quieres agregar? ----------
+export function openAddChooser() {
+  const s = openSheet(`
+    <h3 class="sheet-title center">¿Qué quieres agregar?</h3>
+    <div class="add-grid">
+      ${Object.entries(TYPES).map(([k, t], i) => `<button class="add-tile type-${k}" data-add="${k}" style="--i:${i}">
+        <span class="at-emoji">${t.emoji}</span><b>${t.label}</b><small>${TYPE_DESC[k]}</small></button>`).join('')}
+      <button class="add-tile link-tile" data-act="paste" style="--i:5"><span class="at-emoji">🔗</span><b>Pegar link</b><small>De un capítulo</small></button>
+    </div>
+    <a class="btn ghost block" href="#/importar" data-act="import">${ICONS.upload} Importar marcadores de Chrome</a>`, { cls: 'chooser' });
+  s.el.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-add]');
+    const a = e.target.closest('[data-act]');
+    if (t) { vibrate(10); s.close(); whenSettled(() => openEditor(null, { prefill: { type: t.dataset.add, status: TRACK_ONLY.includes(t.dataset.add) ? 'pendiente' : 'viendo' } })); }
+    else if (a?.dataset.act === 'paste') { s.close(); whenSettled(() => openPasteSheet()); }
+    else if (a?.dataset.act === 'import') { e.preventDefault(); go('#/importar'); }
+  });
+}
+
 // ---------- hoja: Editor de obra ----------
 export function openEditor(work = null, { fromLink = null, prefill = null } = {}) {
   const isNew = !work;
@@ -166,12 +192,12 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
 
   const s = openSheet(`
     <div class="sheet-head"><h3 class="sheet-title">${isNew ? 'Agregar obra' : 'Editar obra'}</h3><button class="icon-btn sm" data-x aria-label="Cerrar">${ICONS.close}</button></div>
-    <div class="seg" id="ed-type" role="radiogroup" aria-label="Tipo">
-      ${Object.entries(TYPES).map(([k, t]) => `<button class="${w.type === k ? 'on' : ''}" data-type="${k}" role="radio" aria-checked="${w.type === k}">${t.label}</button>`).join('')}
+    <div class="type-picker" id="ed-type" role="radiogroup" aria-label="Tipo">
+      ${Object.entries(TYPES).map(([k, t], i) => `<button class="type-tile type-${k} ${w.type === k ? 'on' : ''}" data-type="${k}" role="radio" aria-checked="${w.type === k}" style="--i:${i}"><span class="tt-emoji">${t.emoji}</span><span class="tt-label">${t.label}</span></button>`).join('')}
     </div>
     <label class="field"><span>Nombre</span>
       <div class="ac-wrap">
-        <input id="ed-title" value="${esc(w.title)}" placeholder="Escribe el nombre…" autocomplete="off" enterkeyhint="search">
+        <input id="ed-title" value="${esc(w.title)}" placeholder="${TYPE_HINTS[w.type]}" autocomplete="off" enterkeyhint="search">
         <span class="ac-spin" id="ac-spin" hidden></span>
       </div>
     </label>
@@ -227,6 +253,8 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     if (!b) return;
     w.type = b.dataset.type;
     $$('#ed-type button', el).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+    vibrate(8);
+    titleInput.placeholder = TYPE_HINTS[w.type];
     $$('#ed-status .chip', el).forEach((c) => { c.lastChild.textContent = statusLabel(c.dataset.status, w.type); });
     drawProgress();
     drawKind();

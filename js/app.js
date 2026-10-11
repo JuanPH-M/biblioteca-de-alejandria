@@ -3,12 +3,12 @@ import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vi
 import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
 import { PLATFORMS, STREAMING } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
-import { openEditor, openPasteSheet } from './editor.js';
-import { renderPlatforms, renderPlatform, renderFootball, renderStats, renderSettings, renderImport, streakDays, todayCount } from './sections.js';
-import { uid } from './db.js';
+import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
+import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp } from './sections.js';
+import { renderFootball } from './football.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.4.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -49,7 +49,7 @@ export async function render({ keepScroll = false } = {}) {
   lastRoute = routeKey;
   const map = {
     home: renderHome, obra: (el) => renderDetail(el, r.param), plataformas: renderPlatforms, plataforma: (el) => renderPlatform(el, r.param),
-    futbol: renderFootball, stats: renderStats, ajustes: renderSettings, importar: renderImport,
+    futbol: (el) => renderFootball(el, r.param), stats: renderStats, ajustes: renderSettings, importar: renderImport,
   };
   const fn = map[r.name] || renderHome;
   const update = async () => {
@@ -117,10 +117,11 @@ function continueList() {
   return S.works.filter((w) => ['viendo', 'emision'].includes(w.status)).sort((a, b) => (b.lastOpened || b.updatedAt) - (a.lastOpened || a.updatedAt)).slice(0, 12);
 }
 
+let greeted = false;
+const showInstallHint = () => !isStandalone() && (isIOS() || installPrompt) && !(S.settings.installHint > Date.now() - 30 * 864e5);
 async function renderHome(root) {
   const f = S.filters;
   const total = S.works.length;
-  const streak = streakDays();
   const backupDays = S.settings.lastBackup ? Math.floor((Date.now() - S.settings.lastBackup) / 864e5) : null;
   const showBackup = total >= 3 && (backupDays == null || backupDays > 14) && !(S.settings.backupSnooze > Date.now());
   const cont = continueList();
@@ -132,10 +133,11 @@ async function renderHome(root) {
   <header class="topbar">
     <div class="brand">
       <img src="icons/icon.svg" alt="" width="38" height="38">
-      <div><h1>${hello} <span class="wave">👋</span></h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}${streak ? ` · <span class="flame">🔥</span> ${streak} ${streak === 1 ? 'día' : 'días'}` : ''}</p></div>
+      <div class="brand-text"><h1 class="brand-title ${greeted ? '' : 'greeting'}" id="brand-title">${greeted ? 'Biblioteca de Alejandría' : `${hello} <span class="wave">👋</span>`}</h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}</p></div>
     </div>
     <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
   </header>
+  ${showInstallHint() ? `<div class="banner install-hint"><span>📲 Instala la app en tu ${isIOS() ? 'iPhone' : 'teléfono'} para usarla a pantalla completa.</span><button class="btn sm" id="ih-how">Cómo</button><button class="icon-btn xs" id="ih-x" aria-label="Ocultar">${ICONS.close}</button></div>` : ''}
   ${showBackup ? `<div class="banner warn"><span>💾 ${backupDays == null ? 'Aún no has hecho un respaldo.' : `Tu último respaldo fue ${relTime(S.settings.lastBackup)}.`}</span><a href="#/ajustes" class="btn sm">Respaldar</a></div>` : ''}
   <div class="searchbar">
     <span class="ic">${ICONS.search}</span>
@@ -159,7 +161,7 @@ async function renderHome(root) {
   </section>` : ''}
   <div class="${total ? '' : 'hidden'}">
   <div class="chips scroll-x" id="type-chips" role="tablist">
-    ${[['all', '✨ Todo'], ...Object.entries(TYPES).map(([k, t]) => [k, `${t.emoji} ${t.label}`])].map(([k, l]) => `<button class="chip ${f.type === k ? 'on' : ''}" data-type="${k}">${l}<em>${k === 'all' ? total : S.works.filter((w) => w.type === k).length}</em></button>`).join('')}
+    ${[['all', '✨ Todo'], ...Object.entries(TYPES).map(([k, t]) => [k, `${t.emoji} ${t.label}`])].map(([k, l]) => `<button class="chip tchip type-${k} ${f.type === k ? 'on' : ''}" data-type="${k}">${l}<em>${k === 'all' ? total : S.works.filter((w) => w.type === k).length}</em></button>`).join('')}
   </div>
   <div class="filter-row">
     <label class="select"><select id="f-status" aria-label="Estado">
@@ -200,6 +202,18 @@ async function renderHome(root) {
     btn.innerHTML = S.settings.view === 'grid' ? ICONS.list : ICONS.grid;
     renderGrid();
   };
+  // el saludo se muestra al abrir la app y luego cambia al nombre
+  if (!greeted) {
+    greeted = true;
+    setTimeout(() => {
+      const t = $('#brand-title');
+      if (!t) return;
+      t.classList.add('swap-out');
+      setTimeout(() => { t.innerHTML = 'Biblioteca de Alejandría'; t.classList.remove('greeting', 'swap-out'); t.classList.add('swap-in'); }, reducedMotion() ? 0 : 320);
+    }, 2200);
+  }
+  $('#ih-how', root)?.addEventListener('click', () => { if (!promptInstall()) openInstallHelp(); });
+  $('#ih-x', root)?.addEventListener('click', async (e) => { e.currentTarget.closest('.banner').remove(); await setPref('installHint', Date.now()); });
   root.addEventListener('click', onContinueClick);
   $('#next-pick', root)?.addEventListener('click', openRoulette);
   // al volver del detalle, la portada regresa a su tarjeta
@@ -231,7 +245,7 @@ function spotlightHTML(w) {
         <div><b>${esc(progressLabel(w, false))}</b><small>${relTime(w.lastOpened || w.updatedAt)}</small></div>
       </div>
       <div class="sp-actions">
-        ${t ? `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} Continuar${t.next ? ` · ${TYPES[w.type].unit} ${t.next}` : ''}</button>` : `<a class="btn primary sm" href="#/obra/${w.id}">${ICONS.edit} Registrar avance</a>`}
+        ${t ? `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} ${t.next ? `${TYPES[w.type].unit} ${t.next}` : 'Abrir'}</button>${t.last && t.next ? `<button class="btn sm ghost-glass" data-continue="${w.id}" data-mode="last">↺ ${TYPES[w.type].unit} ${t.last.n}</button>` : ''}` : `<a class="btn primary sm" href="#/obra/${w.id}">${ICONS.edit} Registrar avance</a>`}
       </div>
     </div>
   </section>`;
@@ -306,7 +320,8 @@ function openQuickActions(el) {
       <button class="qa-btn ${w.favorite ? 'on' : ''}" id="qa-fav">${ICONS.heart}<span>${w.favorite ? 'Quitar favorito' : 'Favorito'}</span></button>
       <button class="qa-btn" id="qa-open">${ICONS.eye}<span>Ver detalle</span></button>
       <button class="qa-btn" id="qa-edit">${ICONS.edit}<span>Editar</span></button>
-      ${t ? `<button class="qa-btn" id="qa-go">${ICONS.play}<span>Continuar</span></button>` : ''}
+      ${t ? `<button class="qa-btn" id="qa-go">${ICONS.play}<span>${t.next ? `Siguiente · ${TYPES[w.type].unit} ${t.next}` : 'Abrir link'}</span></button>` : ''}
+      ${t?.last && t.next ? `<button class="qa-btn" id="qa-last">↺<span>Último visto · ${TYPES[w.type].unit} ${t.last.n}</span></button>` : ''}
     </div>`);
   $('#qa-status', s.el).addEventListener('click', async (e) => {
     const c = e.target.closest('[data-status]');
@@ -322,6 +337,7 @@ function openQuickActions(el) {
   $('#qa-open', s.el).onclick = () => go('#/obra/' + w.id);
   $('#qa-edit', s.el).onclick = () => { s.close(); whenSettled(() => openEditor(w)); };
   $('#qa-go', s.el)?.addEventListener('click', () => { s.close(); doContinue(w); });
+  $('#qa-last', s.el)?.addEventListener('click', () => { s.close(); doContinue(w, 'last'); });
 }
 onLongPress(document, '.card, .c-item, .spotlight', openQuickActions);
 
@@ -341,7 +357,7 @@ function renderGrid() {
         <button class="btn" id="e-paste">${ICONS.link} Pegar link de capítulo</button>
         <a class="btn ghost" href="#/importar">${ICONS.upload} Importar marcadores</a>
       </div></div>`;
-    $('#e-add').onclick = () => openEditor();
+    $('#e-add').onclick = () => openAddChooser();
     $('#e-paste').onclick = () => openPasteSheet();
     return;
   }
@@ -356,17 +372,23 @@ function renderGrid() {
 
 async function onContinueClick(e) {
   const b = e.target.closest('[data-continue]');
+  const mode = b?.dataset.mode || 'next';
   if (!b) return;
   e.preventDefault();
   const w = getWork(b.dataset.continue);
-  if (w) doContinue(w);
+  if (w) doContinue(w, mode);
 }
 
-export async function doContinue(w) {
+export async function doContinue(w, mode = 'next') {
   const t = continueTarget(w);
   if (!t) { toast('Esta obra no tiene links guardados.'); return; }
   w.lastOpened = Date.now();
   await saveWork(w, { touch: false });
+  if (mode === 'last' && t.last) {
+    openUrl(t.last.url);
+    toast(`Abriendo ${TYPES[w.type].unitLong} ${t.last.n} (último visto)`, { icon: '↺' });
+    return;
+  }
   openUrl(t.url);
   if (t.next != null && t.next > currentNumber(w)) {
     toast(`Abriendo ${TYPES[w.type].unitLong} ${t.next}`, {
@@ -515,7 +537,7 @@ async function renderDetail(root, id) {
       </div>
     </div>
 
-    ${target ? `<button class="btn primary block lg continue-btn" id="continue">${ICONS.play} Continuar${target.next ? ` · ${t.unit} ${target.next}` : ''}</button>` : ''}
+    ${target ? `<div class="go-row" id="go-row">${goRowHTML(w, target)}</div>` : ''}
 
     ${counterHTML(w)}
 
@@ -533,12 +555,6 @@ async function renderDetail(root, id) {
     <section class="panel">
       <div class="sec-head"><h3>Notas</h3><span class="muted small" id="note-state"></span></div>
       <textarea id="notes" rows="4" placeholder="Escribe lo que quieras recordar…">${esc(w.notes || '')}</textarea>
-    </section>
-
-    <section class="panel">
-      <div class="sec-head"><h3>Spoilers</h3><span class="muted small">toca para revelar</span></div>
-      <div id="spoilers">${(w.spoilers || []).map((s) => `<div class="spoiler" data-sp="${s.id}" tabindex="0" role="button" aria-label="Spoiler oculto, toca para revelar"><span class="sp-text">${esc(s.text)}</span><button class="icon-btn xs sp-del" data-delsp="${s.id}" aria-label="Borrar spoiler">${ICONS.close}</button></div>`).join('') || '<p class="muted small">Guarda aquí lo que no quieres ver por accidente.</p>'}</div>
-      <div class="sp-add"><textarea id="sp-new" rows="2" placeholder="Nuevo spoiler…"></textarea><button class="btn sm" id="sp-save">Agregar</button></div>
     </section>
 
     <div class="meta-foot">
@@ -561,7 +577,7 @@ async function renderDetail(root, id) {
     if (w.favorite) { vibrate(15); const r = btn.getBoundingClientRect(); confetti(r.left + r.width / 2, r.top + r.height / 2, 14); }
     await saveWork(w);
   };
-  $('#continue', root)?.addEventListener('click', () => doContinue(w));
+  $('#go-row', root)?.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) doContinue(w, b.dataset.go); });
   $('#more', root)?.addEventListener('click', (e) => { $('#synopsis').classList.toggle('clamp'); e.target.textContent = $('#synopsis').classList.contains('clamp') ? 'Ver más' : 'Ver menos'; });
 
   // estrellas
@@ -661,29 +677,8 @@ async function renderDetail(root, id) {
   const saveNotes = debounce(async () => { w.notes = notes.value; await saveWork(w); $('#note-state').textContent = 'Guardado ✓'; }, 600);
   notes.addEventListener('input', () => { $('#note-state').textContent = 'Escribiendo…'; saveNotes(); });
 
-  // spoilers
-  $('#spoilers', root).addEventListener('click', async (e) => {
-    const del = e.target.closest('[data-delsp]');
-    if (del) {
-      e.stopPropagation();
-      if (!(await confirmDialog('¿Borrar spoiler?', 'Esta nota se eliminará.', { ok: 'Borrar', danger: true }))) return;
-      w.spoilers = w.spoilers.filter((s) => s.id !== del.dataset.delsp);
-      await saveWork(w); render({ keepScroll: true });
-      return;
-    }
-    const sp = e.target.closest('.spoiler');
-    if (sp) sp.classList.toggle('revealed');
-  });
-  $('#spoilers', root).addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList.contains('spoiler')) e.target.classList.toggle('revealed'); });
-  $('#sp-save', root).onclick = async () => {
-    const text = $('#sp-new').value.trim();
-    if (!text) return;
-    w.spoilers = [...(w.spoilers || []), { id: uid(), text, at: Date.now() }];
-    await saveWork(w); render({ keepScroll: true });
-  };
-
   $('#delete', root).onclick = async () => {
-    if (!(await confirmDialog('¿Eliminar obra?', `Se borrará "${w.title}" con su progreso, notas y links.`, { ok: 'Eliminar', danger: true }))) return;
+    if (!(await confirmDialog(`¿Eliminar ${TYPES[w.type].label.toLowerCase()}?`, `Se borrará "${w.title}" con su progreso, notas${isTrackOnly(w) ? '' : ' y links'}. Esta acción no se puede deshacer después de unos segundos.`, { ok: 'Sí, eliminar', danger: true }))) return;
     const copy = JSON.parse(JSON.stringify(w));
     await deleteWork(w.id);
     go('#/');
@@ -691,11 +686,15 @@ async function renderDetail(root, id) {
   };
 }
 
+function goRowHTML(w, t) {
+  const u = TYPES[w.type].unit;
+  return `<button class="btn primary lg go-next" data-go="next">${ICONS.play}<span><small>${t.next ? 'Siguiente' : 'Continuar'}</small>${t.next ? `${u} ${t.next}` : 'Abrir link'}</span></button>
+    ${t.last && t.next ? `<button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${u} ${t.last.n}</span></button>` : ''}`;
+}
 function refreshContinue(w, root) {
-  const btn = $('#continue', root);
-  if (!btn) return;
+  const row = $('#go-row', root);
   const t = continueTarget(w);
-  btn.innerHTML = `${ICONS.play} Continuar${t?.next ? ` · ${TYPES[w.type].unit} ${t.next}` : ''}`;
+  if (row && t) row.innerHTML = goRowHTML(w, t);
 }
 function updatePbar(w, root) {
   const bar = $('.counter-panel .pbar i', root);
@@ -771,7 +770,7 @@ async function start() {
     toast('No se pudo abrir la base de datos local. ¿Estás en modo incógnito?', { timeout: 8000 });
   }
   applyTheme();
-  $('#fab').onclick = () => { vibrate(10); openEditor(); };
+  $('#fab').onclick = () => { vibrate(10); openAddChooser(); };
   await render();
   setTimeout(() => $('#splash')?.classList.add('hide'), reducedMotion() ? 0 : 350);
   setTimeout(() => $('#splash')?.remove(), 1200);

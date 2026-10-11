@@ -2,7 +2,7 @@
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, readFile, download, relTime, hueOf, initials, coverHTML, vibrate } from './ui.js';
 import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
-import { searchTeams, teamFixtures, ATTRIBUTION, searchInfo } from './api.js';
+import { ATTRIBUTION, searchInfo } from './api.js';
 import { db } from './db.js';
 import { cardHTML, render, go, applyTheme, promptInstall, APP_VERSION } from './app.js';
 
@@ -44,138 +44,11 @@ export function renderPlatform(root, key) {
     : `<div class="empty small"><h3>Nada en ${esc(p.name)} todavía</h3><p class="muted">Cuando agregues un link de ${esc(p.name)} a una obra aparecerá aquí.</p></div>`}`;
 }
 
-// ======================= FÚTBOL =======================
-function teamAvatar(t, size = '') {
-  const c1 = /^#[0-9a-f]{3,8}$/i.test(t.color1) ? t.color1 : `hsl(${hueOf(t.name)} 70% 45%)`;
-  const c2 = /^#[0-9a-f]{3,8}$/i.test(t.color2) ? t.color2 : `hsl(${(hueOf(t.name) + 40) % 360} 70% 30%)`;
-  const label = (t.short && t.short.length <= 4 ? t.short : initials(t.name)).toUpperCase();
-  return `<span class="team-av ${size}" style="--c1:${c1};--c2:${c2}">${esc(label)}</span>`;
-}
-const fmtDate = (ts) => {
-  if (!ts) return 'Fecha por confirmar';
-  const d = new Date(ts);
-  return d.toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-};
-function eventHTML(e, team, past) {
-  const homeIsMe = e.homeId === team.id;
-  let res = '';
-  if (past) {
-    const my = homeIsMe ? +e.hs : +e.as, other = homeIsMe ? +e.as : +e.hs;
-    res = my > other ? 'win' : my < other ? 'loss' : 'draw';
-  }
-  return `<li class="ev ${res}">
-    <div class="ev-teams"><span class="${homeIsMe ? 'me' : ''}">${esc(e.home)}</span>
-      ${past ? `<b class="score">${esc(e.hs)} – ${esc(e.as)}</b>` : '<b class="vs">vs</b>'}
-      <span class="${!homeIsMe ? 'me' : ''}">${esc(e.away)}</span></div>
-    <div class="ev-meta">${esc(e.league || '')}${e.round ? ` · J${esc(e.round)}` : ''} · ${esc(fmtDate(e.ts))}</div>
-    ${past ? `<span class="res-tag">${res === 'win' ? 'G' : res === 'loss' ? 'P' : 'E'}</span>` : ''}
-  </li>`;
-}
-
-export function renderFootball(root) {
-  root.innerHTML = `${pageHeader('Mis equipos', 'Próximos partidos y últimos resultados')}
-  <div class="searchbar">
-    <span class="ic">${ICONS.search}</span>
-    <input id="team-q" type="search" placeholder="Buscar equipo (p. ej. Atlético Nacional)" autocomplete="off" enterkeyhint="search">
-  </div>
-  <div id="team-results"></div>
-  <div id="teams">${S.teams.length ? '' : `<div class="empty small"><div class="empty-art"><span>⚽</span></div><h3>Agrega tus equipos</h3><p class="muted">Busca por nombre y toca "Agregar".</p></div>`}</div>
-  <p class="attr">${esc(ATTRIBUTION.thesportsdb.text)} · <a href="${ATTRIBUTION.thesportsdb.url}" target="_blank" rel="noopener">thesportsdb.com</a>. Los escudos oficiales no se muestran: se usan iniciales y colores.</p>`;
-
-  const q = $('#team-q', root), results = $('#team-results', root);
-  let token = 0;
-  const search = async () => {
-    const v = q.value.trim();
-    if (v.length < 3) { results.innerHTML = ''; return; }
-    const tk = ++token;
-    results.innerHTML = '<div class="loading-row"><span class="spinner"></span> Buscando…</div>';
-    try {
-      const teams = await searchTeams(v);
-      if (tk !== token) return;
-      results.innerHTML = teams.length ? `<ul class="team-results">${teams.map((t) => `<li>${teamAvatar(t, 'sm')}<div class="grow"><b>${esc(t.name)}</b><small class="muted">${esc([t.league, t.country].filter(Boolean).join(' · '))}</small></div>
-        ${S.teams.some((x) => x.id === t.id) ? '<span class="muted small">Agregado</span>' : `<button class="btn sm primary" data-addteam='${esc(JSON.stringify(t))}'>Agregar</button>`}</li>`).join('')}</ul>`
-        : '<div class="muted small pad">No encontré equipos de fútbol con ese nombre. Prueba con el nombre completo o en inglés.</div>';
-    } catch {
-      if (tk === token) results.innerHTML = '<div class="muted small pad">No se pudo buscar (¿sin conexión?).</div>';
-    }
-  };
-  q.addEventListener('input', debounce(search, 500));
-  q.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
-  results.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-addteam]');
-    if (!b) return;
-    const t = JSON.parse(b.dataset.addteam);
-    t.order = S.teams.length;
-    S.teams.push(t);
-    await db.put('teams', t);
-    vibrate(12);
-    toast(`${t.name} agregado`, { icon: '⚽' });
-    q.value = ''; results.innerHTML = '';
-    drawTeams();
-  });
-  drawTeams();
-
-  function drawTeams() {
-    const box = $('#teams', root);
-    if (!S.teams.length) return;
-    box.innerHTML = S.teams.map((t, i) => `
-      <section class="team-card" data-team="${t.id}" style="--i:${i}">
-        <div class="team-head">${teamAvatar(t)}<div class="grow"><h3>${esc(t.name)}</h3><small class="muted">${esc([t.league, t.country].filter(Boolean).join(' · '))}</small></div>
-          <button class="icon-btn sm" data-refresh="${t.id}" aria-label="Actualizar">${ICONS.refresh}</button>
-          <button class="icon-btn sm" data-delteam="${t.id}" aria-label="Quitar equipo">${ICONS.trash}</button></div>
-        <div class="team-body" id="fx-${t.id}"><div class="loading-row"><span class="spinner"></span> Cargando partidos…</div></div>
-      </section>`).join('');
-    S.teams.forEach((t) => loadFixtures(t));
-  }
-  async function loadFixtures(t, force = false) {
-    const box = $('#fx-' + t.id, root);
-    if (!box) return;
-    try {
-      const fx = await teamFixtures(t, { force });
-      box.innerHTML = `
-        <h4>Próximos</h4>
-        ${fx.upcoming.length ? `<ul class="evs">${fx.upcoming.map((e) => eventHTML(e, t, false)).join('')}</ul>` : '<p class="muted small">Sin partidos programados en los datos disponibles.</p>'}
-        <h4>Últimos resultados</h4>
-        ${fx.results.length ? `<ul class="evs">${fx.results.map((e) => eventHTML(e, t, true)).join('')}</ul>` : '<p class="muted small">Sin resultados recientes.</p>'}
-        <p class="muted xsmall">${fx.offline ? 'Sin conexión · ' : ''}Actualizado ${relTime(fx.cachedAt)}</p>`;
-    } catch {
-      box.innerHTML = '<p class="muted small">No se pudieron cargar los partidos. Revisa tu conexión.</p>';
-    }
-  }
-  $('#teams', root).addEventListener('click', async (e) => {
-    const r = e.target.closest('[data-refresh]');
-    const d = e.target.closest('[data-delteam]');
-    if (r) {
-      const t = S.teams.find((x) => x.id === r.dataset.refresh);
-      r.classList.add('spin');
-      await loadFixtures(t, true);
-      r.classList.remove('spin');
-    }
-    if (d) {
-      const t = S.teams.find((x) => x.id === d.dataset.delteam);
-      if (!(await confirmDialog('¿Quitar equipo?', `${t.name} dejará de aparecer en tu lista.`, { ok: 'Quitar', danger: true }))) return;
-      S.teams = S.teams.filter((x) => x.id !== t.id);
-      await db.del('teams', t.id);
-      renderFootball(root);
-    }
-  });
-}
-
 // ======================= ESTADÍSTICAS =======================
 export function todayCount() {
   const d = new Date();
   const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return (S.settings.activity || {})[k] || 0;
-}
-
-export function streakDays() {
-  const a = S.settings.activity || {};
-  const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const d = new Date();
-  if (!a[key(d)]) d.setDate(d.getDate() - 1); // la racha sigue viva si hoy aún no hay actividad
-  let n = 0;
-  while (a[key(d)] > 0) { n++; d.setDate(d.getDate() - 1); }
-  return n;
 }
 
 export function renderStats(root) {
@@ -208,12 +81,11 @@ export function renderStats(root) {
   }
   const maxA = Math.max(1, ...days.map((d) => d[1]));
   const lvl = (n) => (n === 0 ? 0 : Math.min(4, Math.ceil((n / maxA) * 4)));
-  const streak = streakDays();
   const topRated = W.filter((w) => w.rating).sort((a, b) => b.rating - a.rating || b.updatedAt - a.updatedAt).slice(0, 5);
 
   root.innerHTML = `${pageHeader('Estadísticas', `${W.length} obras en tu biblioteca`)}
   <div class="kpis">
-    ${[['📖', chapters, 'capítulos leídos'], ['📺', episodes, 'episodios vistos'], ['🎬', movies, 'películas vistas'], ['❤️', favs.length, 'favoritas'], ['🏁', W.filter((w) => w.status === 'terminado').length, 'terminadas'], ['🔥', streak, streak === 1 ? 'día de racha' : 'días de racha']].map(([ic, n, l], i) => `
+    ${[['📖', chapters, 'capítulos leídos'], ['📺', episodes, 'episodios vistos'], ['🎬', movies, 'películas vistas'], ['❤️', favs.length, 'favoritas'], ['🏁', W.filter((w) => w.status === 'terminado').length, 'terminadas'], ['▶️', W.filter((w) => ['viendo', 'emision'].includes(w.status)).length, 'en curso']].map(([ic, n, l], i) => `
       <div class="kpi" style="--i:${i}"><span class="kpi-ic">${ic}</span><b data-count="${n}">0</b><small>${l}</small></div>`).join('')}
   </div>
 
@@ -257,7 +129,11 @@ export function renderSettings(root) {
   const st = S.settings;
   const days = st.lastBackup ? Math.floor((Date.now() - st.lastBackup) / 864e5) : null;
   const patterns = Object.values(S.patterns);
-  const accents = { violet: '#8b5cf6', gold: '#f59e0b', cyan: '#06b6d4', rose: '#f43f5e', emerald: '#10b981' };
+  const accents = [
+    ['violet', 'Violeta', '#8b5cf6', '#ec4899'], ['azul', 'Azul', '#3b82f6', '#06b6d4'], ['cyan', 'Cian', '#06b6d4', '#3b82f6'],
+    ['emerald', 'Esmeralda', '#10b981', '#84cc16'], ['gold', 'Dorado', '#f59e0b', '#ef4444'], ['naranja', 'Naranja', '#f97316', '#facc15'],
+    ['rose', 'Coral', '#f43f5e', '#a855f7'], ['rojo', 'Rojo', '#dc2626', '#f97316'], ['rosa', 'Rosa', '#ec4899', '#8b5cf6'], ['blanco', 'Blanco', '#f4f4f5', '#71717a'],
+  ];
   root.innerHTML = `${backHeader('Ajustes', `Versión ${APP_VERSION}`, '#/')}
 
   <section class="panel">
@@ -280,7 +156,8 @@ export function renderSettings(root) {
 
   <section class="panel">
     <h3>🎨 Apariencia</h3>
-    <div class="field inline"><span>Color</span><div class="swatches">${Object.entries(accents).map(([k, c]) => `<button class="swatch ${st.accent === k ? 'on' : ''}" data-accent="${k}" style="--c:${c}" aria-label="${k}"></button>`).join('')}</div></div>
+    <p class="muted small">Elige el color de la app. Con <b>Blanco</b> el fondo es negro, las letras blancas y los botones blancos.</p>
+    <div class="palette">${accents.map(([k, name, c, c2], i) => `<button class="pal ${st.accent === k ? 'on' : ''}" data-accent="${k}" style="--c:${c};--c2:${c2};--i:${i}" aria-label="Color ${name}"><i></i><span>${name}</span></button>`).join('')}</div>
     <label class="toggle"><span>Negro puro (AMOLED)</span><input type="checkbox" id="amoled" ${st.amoled ? 'checked' : ''}><i></i></label>
     <label class="toggle"><span>Reducir animaciones</span><input type="checkbox" id="motion" ${st.motion === 'off' ? 'checked' : ''}><i></i></label>
   </section>
@@ -315,7 +192,12 @@ export function renderSettings(root) {
   $('#export', root).onclick = async () => {
     const data = await buildBackup();
     const d = new Date();
-    download(`biblioteca-alejandria-${d.toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 1));
+    const name = `biblioteca-alejandria-${d.toISOString().slice(0, 10)}.json`;
+    const text = JSON.stringify(data, null, 1);
+    const file = typeof File !== 'undefined' ? new File([text], name, { type: 'application/json' }) : null;
+    if (isIOS() && file && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Respaldo Biblioteca de Alejandría' }); } catch (err) { if (err.name === 'AbortError') return; download(name, text); }
+    } else download(name, text);
     await setPref('lastBackup', Date.now());
     toast(`Respaldo exportado: ${data.works.length} obras`, { icon: '💾' });
     renderSettings(root);
@@ -346,22 +228,18 @@ export function renderSettings(root) {
       } catch (err) { toast(err.message || 'No se pudo importar.'); }
     });
   };
-  $$('[data-accent]', root).forEach((b) => b.onclick = async () => { await setPref('accent', b.dataset.accent); applyTheme(); $$('[data-accent]', root).forEach((x) => x.classList.toggle('on', x === b)); });
+  $$('[data-accent]', root).forEach((b) => b.onclick = async () => { await setPref('accent', b.dataset.accent); applyTheme(); vibrate(10); $$('[data-accent]', root).forEach((x) => x.classList.toggle('on', x === b)); });
   $('#amoled', root).onchange = async (e) => { await setPref('amoled', e.target.checked); applyTheme(); };
   $('#motion', root).onchange = async (e) => { await setPref('motion', e.target.checked ? 'off' : 'auto'); applyTheme(); };
   root.querySelector('.pattern-list')?.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-delpat]');
     if (!b) return;
+    if (!(await confirmDialog('¿Borrar este patrón?', `La app volverá a preguntarte cuál es el número del capítulo en ${b.dataset.delpat}.`, { ok: 'Borrar', danger: true }))) return;
     await deletePattern(b.dataset.delpat);
     renderSettings(root);
   });
   $('#install', root).onclick = () => {
-    if (!promptInstall()) {
-      openSheet(`<h3 class="sheet-title">Instalar en Android</h3><ol class="steps">
-        <li>Abre esta página en <b>Chrome</b>.</li><li>Toca el menú <b>⋮</b> (arriba a la derecha).</li>
-        <li>Elige <b>Agregar a pantalla de inicio</b> o <b>Instalar app</b>.</li><li>Confirma con <b>Instalar</b>.</li></ol>
-        <p class="muted small">Si ya está instalada, ábrela desde el ícono del templo dorado.</p>`);
-    }
+    if (!promptInstall()) openInstallHelp();
   };
   $('#fill-covers', root).onclick = () => fillCovers();
   $('#wipe', root).onclick = async () => {
@@ -369,6 +247,35 @@ export function renderSettings(root) {
     await Promise.all(['works', 'patterns', 'teams', 'settings', 'cache'].map((s) => db.clear(s)));
     location.reload();
   };
+}
+
+export const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+export function openInstallHelp() {
+  const ios = isIOS();
+  openSheet(`<h3 class="sheet-title">📲 Instalar la app</h3>
+    ${isStandalone() ? '<p class="banner ok">✅ Ya la estás usando instalada.</p>' : ''}
+    <div class="seg mini3 two" id="ih-tabs"><button class="${ios ? '' : 'on'}" data-os="android">Android</button><button class="${ios ? 'on' : ''}" data-os="ios">iPhone</button></div>
+    <ol class="steps big-steps" data-os-steps="android" ${ios ? 'hidden' : ''}>
+      <li><span>1</span><div>Abre la app en <b>Google Chrome</b>.</div></li>
+      <li><span>2</span><div>Toca el menú <b>⋮</b> arriba a la derecha.</div></li>
+      <li><span>3</span><div>Elige <b>Instalar app</b> o <b>Agregar a pantalla de inicio</b>.</div></li>
+      <li><span>4</span><div>Confirma con <b>Instalar</b>. Aparece el ícono del templo dorado.</div></li>
+    </ol>
+    <ol class="steps big-steps" data-os-steps="ios" ${ios ? '' : 'hidden'}>
+      <li><span>1</span><div>Abre la app en <b>Safari</b> (en iPhone solo Safari permite instalarla).</div></li>
+      <li><span>2</span><div>Toca el botón <b>Compartir</b> <i class="ios-share">⬆︎</i> abajo en el centro.</div></li>
+      <li><span>3</span><div>Baja y elige <b>Agregar a inicio</b>.</div></li>
+      <li><span>4</span><div>Toca <b>Agregar</b> arriba a la derecha. Ábrela siempre desde el ícono.</div></li>
+    </ol>
+    <p class="muted small">Instalada funciona a pantalla completa y sin internet para ver tu lista.</p>`).el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-os]');
+    if (!b) return;
+    const sheet = b.closest('.sheet-body');
+    $$('[data-os]', sheet).forEach((x) => x.classList.toggle('on', x === b));
+    $$('[data-os-steps]', sheet).forEach((ol) => { ol.hidden = ol.dataset.osSteps !== b.dataset.os; });
+  });
 }
 
 // Busca portada y datos para las obras que no tienen (respeta los límites de las APIs)

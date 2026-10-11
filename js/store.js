@@ -45,7 +45,7 @@ export const S = {
   works: [],
   patterns: {},
   teams: [],
-  settings: { lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated' },
+  settings: { leagues: [], installHint: 0, lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated' },
   filters: { q: '', type: 'all', status: 'all', platform: 'all', fav: false },
 };
 
@@ -212,13 +212,15 @@ export function continueTarget(w) {
   if (l.platform === 'web' && TYPES[w.type]?.reading !== undefined && w.type !== 'pelicula') {
     const n = currentNumber(w);
     const next = nextChapterUrl(l.url, n, S.patterns);
-    if (next && n > 0) return { url: next, next: Math.floor(n) + 1, link: l };
+    // último visto: el capítulo actual (si se puede armar el link) o el link guardado
+    const last = n > 0 ? { url: chapterUrl(l.url, n, S.patterns) || l.url, n } : null;
+    if (next && n > 0) return { url: next, next: Math.floor(n) + 1, link: l, last };
     if (next && n === 0) {
       const first = chapterUrl(l.url, 1, S.patterns);
-      return { url: first || l.url, next: first ? 1 : null, link: l };
+      return { url: first || l.url, next: first ? 1 : null, link: l, last: null };
     }
   }
-  return { url: l.url, next: null, link: l };
+  return { url: l.url, next: null, link: l, last: null };
 }
 
 export function openUrl(url) {
