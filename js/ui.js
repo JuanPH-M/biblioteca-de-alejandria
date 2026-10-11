@@ -130,10 +130,24 @@ export function bump(el) {
 // Número que "salta": el valor viejo sale hacia arriba y el nuevo entra desde abajo
 export function rollNumber(el, value, dir = 1) {
   if (!el) return;
-  const old = el.textContent;
-  if (reducedMotion() || old === String(value)) { el.textContent = value; return; }
-  el.innerHTML = `<span class="roll"><span class="roll-old ${dir > 0 ? 'up' : 'down'}">${esc(old)}</span><span class="roll-new ${dir > 0 ? 'up' : 'down'}">${esc(value)}</span></span>`;
-  setTimeout(() => { el.textContent = value; }, 420);
+  const val = String(value);
+  const cur = el.dataset.value ?? el.textContent.trim();
+  el.dataset.value = val;
+  if (cur === val) return;
+  if (reducedMotion()) { el.textContent = val; return; }
+  // si llega otro toque a mitad de la animación, se descarta la anterior
+  clearTimeout(el._rollT);
+  const shown = el.querySelector('.rn-cur')?.textContent ?? cur;
+  const d = dir > 0 ? 'up' : 'down';
+  const oldS = document.createElement('span');
+  oldS.className = `rn rn-old ${d}`;
+  oldS.textContent = shown;
+  const newS = document.createElement('span');
+  newS.className = `rn rn-cur ${d}`;
+  newS.textContent = val;
+  el.classList.add('rolling');
+  el.replaceChildren(oldS, newS);
+  el._rollT = setTimeout(() => { el.classList.remove('rolling'); el.textContent = val; }, 360);
   bump(el);
 }
 
