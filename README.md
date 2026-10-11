@@ -73,10 +73,11 @@ En Android, con la app instalada, también puedes usar **Compartir → Alejandr�
 En la pestaña **Plataformas** ves todo lo que tienes en Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll y páginas web.
 
 ### 6. Fútbol
-- **🛡️ Equipos**: busca tu club o selección y toca **Seguir**. Verás próximos partidos y últimos resultados.
-- **🏆 Ligas**: toca la Champions, la Premier, La Liga… o busca los torneos de tu país (p. ej. *Colombia*). Cada liga muestra **Partidos**, **Tabla** y **Torneos** relacionados del mismo país.
-- **Toca cualquier partido** para ver su detalle en tres pestañas: **Resumen** (marcador, goles por equipo, momentos del partido en línea de tiempo y botón para ver el **resumen con los goles en YouTube**), **Alineaciones** y **Estadísticas**. Si un partido no trae video, el botón busca el resumen en YouTube.
-- Para quitar un equipo o una liga toca 🗑️: la app siempre pide confirmación.
+- **🛡️ Equipos**: toca **＋ Agregar equipo o selección**, búscalo y toca **Seguir**. Tus equipos aparecen como recuadros con su próximo partido; toca uno para ver sus próximos partidos y últimos resultados.
+- **🏆 Ligas**: toca **＋ Agregar liga o torneo** y elige entre las populares (Champions, Premier, La Liga, Liga BetPlay, **Torneo BetPlay – Primera B**, Copa Colombia, Libertadores…) o busca los torneos de un país. Al tocar una liga ves **Partidos**, **Tabla** y **Torneos** del mismo país.
+- **🛡️ Escudo propio**: dentro de un equipo o liga toca **Escudo** y pega el link de una imagen o elige una de tu galería. Se guarda solo en tu teléfono.
+- **Toca un partido** para ver el resultado, la fecha, el estadio y un botón para ver el **resumen en YouTube**.
+- Para quitar un equipo o una liga ábrelo y toca **Quitar**: la app siempre pide confirmación.
 
 ### 7. Notas
 Cada obra tiene un espacio de **notas** que se guarda solo mientras escribes.
@@ -139,7 +140,7 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 
 ## ⚠️ Límites conocidos
 
-- **Fútbol:** la clave gratuita de TheSportsDB entrega datos recortados: la tabla de posiciones muestra solo los primeros puestos y en el detalle de un partido llegan como máximo 5 elementos por sección (goles/cambios/tarjetas, alineaciones y estadísticas). No todos los partidos tienen video.
+- **Fútbol:** los datos gratuitos de TheSportsDB no incluyen alineaciones completas ni goleadores, por eso cada partido muestra solo el resultado; la tabla de posiciones muestra los primeros puestos.
 - **Películas:** Wikipedia no da géneros y algunas películas pequeñas o muy nuevas pueden no tener póster.
 - **iPhone:** no hay "Compartir → Alejandría" desde Safari (Apple no lo permite en apps web) ni vibración; todo lo demás funciona igual.
 

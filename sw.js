@@ -1,6 +1,6 @@
 // Service worker: la app funciona sin internet (tu lista vive en IndexedDB).
 // Cambia VERSION en cada publicación para que los teléfonos reciban la actualización.
-const VERSION = 'v1.5.0';
+const VERSION = 'v1.6.0';
 const SHELL = `shell-${VERSION}`;
 const IMAGES = 'covers-v1';
 const ASSETS = [
