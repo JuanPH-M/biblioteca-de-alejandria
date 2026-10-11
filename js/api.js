@@ -1,4 +1,4 @@
-// APIs gratuitas y sin clave: AniList (GraphQL), TVmaze, Wikipedia y TheSportsDB.
+// APIs gratuitas y sin clave: AniList (GraphQL), TVmaze, Wikipedia, ESPN (datos públicos) y Jolpica F1.
 import { cacheGet, cacheSet } from './db.js';
 
 const GENRES_ES = {
@@ -167,184 +167,18 @@ export const ATTRIBUTION = {
   anilist: { name: 'AniList', url: 'https://anilist.co', text: 'Datos e imágenes de AniList' },
   tvmaze: { name: 'TVmaze', url: 'https://www.tvmaze.com', text: 'Datos de TVmaze (CC BY-SA 4.0)' },
   wikipedia: { name: 'Wikipedia', url: 'https://es.wikipedia.org', text: 'Textos de Wikipedia (CC BY-SA 4.0)' },
-  thesportsdb: { name: 'TheSportsDB', url: 'https://www.thesportsdb.com', text: 'Datos de fútbol de TheSportsDB' },
 };
-
-// ---------- TheSportsDB (clave pública gratuita "123") ----------
-const SDB = 'https://www.thesportsdb.com/api/v1/json/123';
-
-export async function searchTeams(query) {
-  const d = await fetchJSON(`${SDB}/searchteams.php?t=${encodeURIComponent(query.trim())}`);
-  return (d.teams || []).filter((t) => t.strSport === 'Soccer').map(teamFromApi);
-}
-export function teamFromApi(t) {
-  return {
-    id: t.idTeam,
-    name: t.strTeam,
-    short: t.strTeamShort || '',
-    alt: t.strTeamAlternate || '',
-    league: t.strLeague || '',
-    leagueId: t.idLeague || '',
-    country: t.strCountry || '',
-    stadium: t.strStadium || '',
-    founded: t.intFormedYear || '',
-    color1: t.strColour1 || '',
-    color2: t.strColour2 || '',
-  };
-}
-
-const evFromApi = (e) => ({
-  id: e.idEvent,
-  home: e.strHomeTeam, away: e.strAwayTeam, homeId: e.idHomeTeam, awayId: e.idAwayTeam,
-  hs: e.intHomeScore, as: e.intAwayScore,
-  league: e.strLeague, leagueId: e.idLeague, season: e.strSeason, round: e.intRound,
-  ts: e.strTimestamp ? e.strTimestamp + (e.strTimestamp.endsWith('Z') || /[+-]\d\d:?\d\d$/.test(e.strTimestamp) ? '' : 'Z') : (e.dateEvent ? e.dateEvent + 'T' + (e.strTime || '00:00:00') + 'Z' : null),
-  status: e.strStatus || '', venue: e.strVenue || '',
-});
-
-// La clave gratuita devuelve 1 partido próximo y 1 último; se completa con las jornadas vecinas de la liga.
-export async function teamFixtures(team, { force = false } = {}) {
-  const key = 'fx:' + team.id;
-  const cached = await cacheGet(key, 60 * 60 * 1000);
-  if (cached && cached.fresh && !force) return { ...cached.data, cachedAt: cached.t };
-  try {
-    const [nx, ls] = await Promise.all([
-      fetchJSON(`${SDB}/eventsnext.php?id=${team.id}`).catch(() => ({})),
-      fetchJSON(`${SDB}/eventslast.php?id=${team.id}`).catch(() => ({})),
-    ]);
-    const next = (nx.events || []).map(evFromApi);
-    const last = (ls.results || []).map(evFromApi);
-    const mine = (e) => e.homeId === team.id || e.awayId === team.id;
-    const asked = new Set();
-    const rounds = async (ev, deltas) => {
-      if (!ev || !ev.round || !ev.leagueId || !ev.season) return [];
-      const r = parseInt(ev.round, 10);
-      const urls = deltas.map((d) => r + d).filter((n) => n > 0 && n < 60)
-        .map((n) => `${SDB}/eventsround.php?id=${ev.leagueId}&r=${n}&s=${ev.season}`)
-        .filter((u) => !asked.has(u) && asked.add(u));
-      const res = await Promise.all(urls.map((u) => fetchJSON(u).catch(() => ({}))));
-      return res.flatMap((x) => (x.events || []).map(evFromApi)).filter(mine);
-    };
-    // jornadas vecinas del próximo partido y del último (cubre liga y copa)
-    const [moreNext, moreLast, leagueNext] = await Promise.all([rounds(next[0], [1, 2]), rounds(last[0], [-1, -2]), next[0]?.leagueId !== last[0]?.leagueId ? rounds(last[0], [1, 2]) : []]);
-    moreNext.push(...leagueNext);
-    const now = Date.now();
-    const uniq = (arr) => [...new Map(arr.map((e) => [e.id, e])).values()];
-    const upcoming = uniq([...next, ...moreNext]).filter((e) => !e.ts || new Date(e.ts).getTime() > now - 3 * 3600e3).sort((a, b) => (a.ts || '').localeCompare(b.ts || '')).slice(0, 4);
-    const results = uniq([...last, ...moreLast]).filter((e) => e.hs != null && e.hs !== '').sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).slice(0, 4);
-    const data = { upcoming, results };
-    await cacheSet(key, data);
-    return { ...data, cachedAt: Date.now() };
-  } catch (err) {
-    if (cached) return { ...cached.data, cachedAt: cached.t, offline: true };
-    throw err;
-  }
-}
-
-// ---------- Ligas y detalle de partidos (TheSportsDB) ----------
-// Ligas populares (IDs de TheSportsDB). Los colores son propios, no logos.
-export const POPULAR_LEAGUES = [
-  { id: '4480', name: 'Champions League', country: 'Europa', flag: '🇪🇺', c1: '#1e3a8a', c2: '#60a5fa' },
-  { id: '4328', name: 'Premier League', country: 'Inglaterra', flag: '🏴', c1: '#581c87', c2: '#22d3ee' },
-  { id: '4335', name: 'La Liga', country: 'España', flag: '🇪🇸', c1: '#b91c1c', c2: '#facc15' },
-  { id: '4332', name: 'Serie A', country: 'Italia', flag: '🇮🇹', c1: '#065f46', c2: '#38bdf8' },
-  { id: '4331', name: 'Bundesliga', country: 'Alemania', flag: '🇩🇪', c1: '#991b1b', c2: '#f97316' },
-  { id: '4334', name: 'Ligue 1', country: 'Francia', flag: '🇫🇷', c1: '#1e293b', c2: '#a3e635' },
-  { id: '4497', name: 'Liga BetPlay', country: 'Colombia', flag: '🇨🇴', c1: '#ca8a04', c2: '#2563eb' },
-  { id: '4951', name: 'Torneo BetPlay (Primera B)', country: 'Colombia', flag: '🇨🇴', c1: '#1d4ed8', c2: '#dc2626' },
-  { id: '5183', name: 'Copa Colombia', country: 'Colombia', flag: '🇨🇴', c1: '#b45309', c2: '#facc15' },
-  { id: '4481', name: 'Europa League', country: 'Europa', flag: '🇪🇺', c1: '#c2410c', c2: '#fbbf24' },
-  { id: '5071', name: 'Conference League', country: 'Europa', flag: '🇪🇺', c1: '#166534', c2: '#4ade80' },
-  { id: '4351', name: 'Brasileirão', country: 'Brasil', flag: '🇧🇷', c1: '#15803d', c2: '#facc15' },
-  { id: '4406', name: 'Liga Profesional', country: 'Argentina', flag: '🇦🇷', c1: '#0369a1', c2: '#7dd3fc' },
-  { id: '4501', name: 'Copa Libertadores', country: 'Sudamérica', flag: '🌎', c1: '#78350f', c2: '#fbbf24' },
-  { id: '4724', name: 'Copa Sudamericana', country: 'Sudamérica', flag: '🌎', c1: '#1e40af', c2: '#f87171' },
-  { id: '4429', name: 'Mundial', country: 'FIFA', flag: '🌍', c1: '#7f1d1d', c2: '#fcd34d' },
-  { id: '4482', name: 'FA Cup', country: 'Inglaterra', flag: '🏴', c1: '#1e3a8a', c2: '#f87171' },
-  { id: '4483', name: 'Copa del Rey', country: 'España', flag: '🇪🇸', c1: '#7c2d12', c2: '#fde047' },
-];
-
-const COUNTRY_EN = {
-  espana: 'Spain', inglaterra: 'England', alemania: 'Germany', francia: 'France', italia: 'Italy', brasil: 'Brazil',
-  mexico: 'Mexico', estadosunidos: 'USA', eeuu: 'USA', paisesbajos: 'Netherlands', holanda: 'Netherlands', peru: 'Peru',
-  escocia: 'Scotland', belgica: 'Belgium', turquia: 'Turkey', japon: 'Japan', arabiasaudita: 'Saudi Arabia', gales: 'Wales',
-  suiza: 'Switzerland', grecia: 'Greece', rusia: 'Russia', ucrania: 'Ukraine', dinamarca: 'Denmark', suecia: 'Sweden',
-  noruega: 'Norway', polonia: 'Poland', austria: 'Austria', croacia: 'Croatia', europa: 'Europe', mundo: 'World',
-};
-const normC = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
-
-export function leagueFromApi(l) {
-  return { id: l.idLeague, name: l.strLeague, alt: l.strLeagueAlternate || '', country: l.strCountry || '', season: l.strCurrentSeason || '' };
-}
-export async function searchLeagues(country) {
-  const c = COUNTRY_EN[normC(country)] || country.trim();
-  const d = await fetchJSON(`${SDB}/search_all_leagues.php?c=${encodeURIComponent(c)}&s=Soccer`);
-  return (d.countries || d.countrys || []).filter((l) => !l.strSport || l.strSport === 'Soccer').map(leagueFromApi);
-}
-
-// Próxima jornada, últimos resultados y tabla de una liga
-export async function leagueOverview(lg, { force = false } = {}) {
-  const key = 'lg:' + lg.id;
-  const cached = await cacheGet(key, 60 * 60 * 1000);
-  if (cached && cached.fresh && !force) return { ...cached.data, cachedAt: cached.t };
-  try {
-    const [past, next] = await Promise.all([
-      fetchJSON(`${SDB}/eventspastleague.php?id=${lg.id}`).catch(() => ({})),
-      fetchJSON(`${SDB}/eventsnextleague.php?id=${lg.id}`).catch(() => ({})),
-    ]);
-    const pe = (past.events || []).map(evFromApi)[0];
-    const ne = (next.events || []).map(evFromApi)[0];
-    const season = ne?.season || pe?.season || lg.season;
-    const roundOf = (ev) => (ev?.round && ev.round !== '0' ? ev.round : null);
-    const rounds = [...new Set([roundOf(pe), roundOf(ne)].filter(Boolean))];
-    const roundEvents = (await Promise.all(rounds.map((r) => fetchJSON(`${SDB}/eventsround.php?id=${lg.id}&r=${r}&s=${season}`).catch(() => ({})))))
-      .flatMap((x) => (x.events || []).map(evFromApi));
-    const all = [...new Map([...roundEvents, pe, ne].filter(Boolean).map((e) => [e.id, e])).values()];
-    const played = (e) => e.hs != null && e.hs !== '';
-    const results = all.filter(played).sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
-    const upcoming = all.filter((e) => !played(e)).sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
-    let table = [];
-    try {
-      const t = await fetchJSON(`${SDB}/lookuptable.php?l=${lg.id}&s=${season}`);
-      table = (t.table || []).map((r) => ({ rank: +r.intRank, team: r.strTeam, teamId: r.idTeam, played: +r.intPlayed, w: +r.intWin, d: +r.intDraw, l: +r.intLoss, gd: +r.intGoalDifference, pts: +r.intPoints, form: r.strForm || '', group: r.strGroup || '' }));
-    } catch { /* tabla no disponible */ }
-    const data = { results, upcoming, table, season, round: roundOf(ne) || roundOf(pe) };
-    await cacheSet(key, data);
-    return { ...data, cachedAt: Date.now() };
-  } catch (err) {
-    if (cached) return { ...cached.data, cachedAt: cached.t, offline: true };
-    throw err;
-  }
-}
-
-// Datos básicos de un partido (estadio, ciudad y video del resumen si existe)
-export async function matchInfo(id) {
-  const key = 'mi:' + id;
-  const cached = await cacheGet(key, 6 * 60 * 60 * 1000);
-  if (cached && cached.fresh) return cached.data;
-  try {
-    const ev = await fetchJSON(`${SDB}/lookupevent.php?id=${id}`);
-    const e = (ev.events || [])[0] || {};
-    const data = {
-      venue: e.strVenue || '', city: e.strCity || '',
-      video: /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(e.strVideo || '') ? e.strVideo : '',
-    };
-    await cacheSet(key, data);
-    return data;
-  } catch (err) {
-    if (cached) return cached.data;
-    throw err;
-  }
-}
 
 // ======================= OTROS DEPORTES =======================
-// NBA, MLB y UFC: datos públicos de ESPN (sin clave). F1: Jolpica (continuación abierta de Ergast).
+// Fútbol, NBA, MLB y UFC: datos públicos de ESPN (sin clave). F1: Jolpica (continuación abierta de Ergast).
 // Solo se usan textos y números; nunca logos ni imágenes de equipos o ligas.
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
 const ESPN2 = 'https://site.api.espn.com/apis/v2/sports';
 const F1API = 'https://api.jolpi.ca/ergast/f1';
 export const SPORT_PATHS = { nba: 'basketball/nba', mlb: 'baseball/mlb', ufc: 'mma/ufc' };
 ATTRIBUTION.espn = { name: 'ESPN', url: 'https://www.espn.com', text: 'Resultados y calendarios con datos públicos de ESPN' };
+// 'nba', 'mlb' o una liga de fútbol como 'soccer/col.1'
+const pathOf = (sport) => SPORT_PATHS[sport] || sport;
 ATTRIBUTION.jolpica = { name: 'Jolpica F1', url: 'https://github.com/jolpica/jolpica-f1', text: 'Datos de Fórmula 1 de Jolpica (Ergast)' };
 
 // Guarda en caché y, si no hay conexión, devuelve lo último que se descargó
@@ -371,13 +205,13 @@ function espnGame(e) {
     const sc = typeof x.score === 'object' ? x.score?.displayValue : x.score;
     return {
       id: t.id, name: t.displayName || t.name || '?', short: t.abbreviation || '', color1: hexOk(t.color), color2: hexOk(t.alternateColor),
-      score: sc ?? '', winner: !!x.winner, record: x.records?.[0]?.summary || x.record?.[0]?.displayValue || '',
+      score: sc ?? '', winner: !!x.winner, pen: x.shootoutScore ?? '', record: x.records?.[0]?.summary || x.record?.[0]?.displayValue || '',
       lines: (x.linescores || []).map((l) => l.displayValue ?? l.value),
     };
   };
   const st = e.status?.type || c.status?.type || {};
   return {
-    id: e.id, ts: e.date, state: st.state || 'pre', detail: st.shortDetail || st.detail || '', completed: !!st.completed,
+    id: e.id, ts: e.date, state: st.state || 'pre', detail: st.shortDetail || st.detail || '', completed: !!st.completed, clock: e.status?.displayClock || c.status?.displayClock || '',
     home: side('home'), away: side('away'),
     venue: c.venue?.fullName || '', city: [c.venue?.address?.city, c.venue?.address?.state].filter(Boolean).join(', '),
     note: (c.notes || []).map((n) => n.headline).filter(Boolean).join(' · ') || c.series?.summary || '',
@@ -390,7 +224,7 @@ export async function sportDay(sport, date, { force = false } = {}) {
   const d = ymd(date);
   const past = date < new Date(Date.now() - 36 * 3600e3);
   return cached(`sd:${sport}:${d}`, past ? 7 * 864e5 : 5 * 60e3, async () => {
-    const j = await fetchJSON(`${ESPN}/${SPORT_PATHS[sport]}/scoreboard?dates=${d}`);
+    const j = await fetchJSON(`${ESPN}/${pathOf(sport)}/scoreboard?dates=${d}`);
     return (j.events || []).map(espnGame).sort((a, b) => a.ts.localeCompare(b.ts));
   }, force);
 }
@@ -398,7 +232,7 @@ export async function sportDay(sport, date, { force = false } = {}) {
 // Tabla por conferencia / liga
 export async function sportStandings(sport, { force = false } = {}) {
   return cached('ss:' + sport, 3 * 3600e3, async () => {
-    const j = await fetchJSON(`${ESPN2}/${SPORT_PATHS[sport]}/standings`);
+    const j = await fetchJSON(`${ESPN2}/${pathOf(sport)}/standings`);
     return (j.children || []).map((g) => {
       const rows = (g.standings?.entries || []).map((en) => {
         const s = Object.fromEntries((en.stats || []).map((x) => [x.name, x]));
@@ -406,9 +240,12 @@ export async function sportStandings(sport, { force = false } = {}) {
         return {
           id: en.team?.id, name: en.team?.displayName || '', short: en.team?.abbreviation || '', color1: hexOk(en.team?.color), color2: hexOk(en.team?.alternateColor),
           w: v('wins'), l: v('losses'), pct: v('winPercent'), gb: v('gamesBehind'), streak: v('streak'), seed: +(s.playoffSeed?.value || 0), wp: +(s.winPercent?.value || 0),
+          // fútbol
+          rank: +(s.rank?.value || 0), pj: v('gamesPlayed'), d: v('ties'), gd: v('pointDifferential'), pts: v('points'),
+          note: en.note ? { color: en.note.color || '', text: en.note.description || '' } : null,
         };
       });
-      rows.sort((a, b) => (a.seed && b.seed ? a.seed - b.seed : b.wp - a.wp));
+      rows.sort((a, b) => (a.rank && b.rank ? a.rank - b.rank : a.seed && b.seed ? a.seed - b.seed : b.wp - a.wp));
       return { name: g.name, rows };
     });
   }, force);
@@ -513,3 +350,139 @@ export async function f1Standings({ force = false } = {}) {
     };
   }, force);
 }
+
+// ---------- Fútbol (datos públicos de ESPN) ----------
+// Ligas populares con su código de ESPN. Los colores son propios, no logos.
+export const POPULAR_LEAGUES = [
+  { id: 'col.1', name: 'Liga BetPlay', country: 'Colombia', flag: '🇨🇴', c1: '#ca8a04', c2: '#2563eb' },
+  { id: 'col.2', name: 'Torneo BetPlay (Primera B)', country: 'Colombia', flag: '🇨🇴', c1: '#1d4ed8', c2: '#dc2626' },
+  { id: 'col.copa', name: 'Copa Colombia', country: 'Colombia', flag: '🇨🇴', c1: '#b45309', c2: '#facc15' },
+  { id: 'uefa.champions', name: 'Champions League', country: 'Europa', flag: '🇪🇺', c1: '#1e3a8a', c2: '#60a5fa' },
+  { id: 'eng.1', name: 'Premier League', country: 'Inglaterra', flag: '🏴', c1: '#581c87', c2: '#22d3ee' },
+  { id: 'esp.1', name: 'La Liga', country: 'España', flag: '🇪🇸', c1: '#b91c1c', c2: '#facc15' },
+  { id: 'ita.1', name: 'Serie A', country: 'Italia', flag: '🇮🇹', c1: '#065f46', c2: '#38bdf8' },
+  { id: 'ger.1', name: 'Bundesliga', country: 'Alemania', flag: '🇩🇪', c1: '#991b1b', c2: '#f97316' },
+  { id: 'fra.1', name: 'Ligue 1', country: 'Francia', flag: '🇫🇷', c1: '#1e293b', c2: '#a3e635' },
+  { id: 'uefa.europa', name: 'Europa League', country: 'Europa', flag: '🇪🇺', c1: '#c2410c', c2: '#fbbf24' },
+  { id: 'uefa.europa.conf', name: 'Conference League', country: 'Europa', flag: '🇪🇺', c1: '#166534', c2: '#4ade80' },
+  { id: 'conmebol.libertadores', name: 'Copa Libertadores', country: 'Sudamérica', flag: '🌎', c1: '#78350f', c2: '#fbbf24' },
+  { id: 'conmebol.sudamericana', name: 'Copa Sudamericana', country: 'Sudamérica', flag: '🌎', c1: '#1e40af', c2: '#f87171' },
+  { id: 'bra.1', name: 'Brasileirão', country: 'Brasil', flag: '🇧🇷', c1: '#15803d', c2: '#facc15' },
+  { id: 'arg.1', name: 'Liga Profesional', country: 'Argentina', flag: '🇦🇷', c1: '#0369a1', c2: '#7dd3fc' },
+  { id: 'mex.1', name: 'Liga MX', country: 'México', flag: '🇲🇽', c1: '#14532d', c2: '#ef4444' },
+  { id: 'usa.1', name: 'MLS', country: 'Estados Unidos', flag: '🇺🇸', c1: '#1e3a8a', c2: '#ef4444' },
+  { id: 'por.1', name: 'Liga Portugal', country: 'Portugal', flag: '🇵🇹', c1: '#166534', c2: '#dc2626' },
+  { id: 'ned.1', name: 'Eredivisie', country: 'Países Bajos', flag: '🇳🇱', c1: '#c2410c', c2: '#1d4ed8' },
+  { id: 'fifa.world', name: 'Mundial', country: 'FIFA', flag: '🌍', c1: '#7f1d1d', c2: '#fcd34d' },
+  { id: 'fifa.worldq.conmebol', name: 'Eliminatorias Sudamericanas', country: 'Sudamérica', flag: '🌎', c1: '#713f12', c2: '#22c55e' },
+  { id: 'conmebol.america', name: 'Copa América', country: 'Sudamérica', flag: '🌎', c1: '#1e3a8a', c2: '#facc15' },
+  { id: 'eng.fa', name: 'FA Cup', country: 'Inglaterra', flag: '🏴', c1: '#1e3a8a', c2: '#f87171' },
+  { id: 'esp.copa_del_rey', name: 'Copa del Rey', country: 'España', flag: '🇪🇸', c1: '#7c2d12', c2: '#fde047' },
+];
+// IDs de la versión anterior (TheSportsDB) → código de ESPN
+export const LEGACY_LEAGUES = {
+  4480: 'uefa.champions', 4328: 'eng.1', 4335: 'esp.1', 4332: 'ita.1', 4331: 'ger.1', 4334: 'fra.1', 4497: 'col.1', 4951: 'col.2', 5183: 'col.copa',
+  4481: 'uefa.europa', 5071: 'uefa.europa.conf', 4351: 'bra.1', 4406: 'arg.1', 4501: 'conmebol.libertadores', 4724: 'conmebol.sudamericana',
+  4429: 'fifa.world', 4482: 'eng.fa', 4483: 'esp.copa_del_rey',
+};
+const ESPN_SEARCH = 'https://site.web.api.espn.com/apis/common/v3/search';
+
+// Busca clubes y selecciones
+export async function soccerSearchTeams(query) {
+  const j = await fetchJSON(`${ESPN_SEARCH}?query=${encodeURIComponent(query)}&type=team&sport=soccer&limit=20`);
+  return (j.items || []).filter((x) => x.sport === 'soccer' || !x.sport).map((x) => ({
+    id: String(x.id), name: x.displayName, short: x.abbreviation || '', league: x.defaultLeagueSlug || x.league || '',
+    country: x.location || '', src: 'espn',
+  }));
+}
+// Busca ligas y torneos
+export async function soccerSearchLeagues(query) {
+  const j = await fetchJSON(`${ESPN_SEARCH}?query=${encodeURIComponent(query)}&type=league&sport=soccer&limit=20`);
+  return (j.items || []).map((x) => ({ id: x.defaultLeagueSlug || x.league || x.slug, name: x.displayName, country: '' })).filter((x) => x.id);
+}
+
+// Todos los partidos de un equipo (todas las competiciones)
+export async function soccerTeamSchedule(teamId, { force = false } = {}) {
+  return cached('sct:' + teamId, 30 * 60e3, async () => {
+    const base = `${ESPN}/soccer/all/teams/${teamId}/schedule`;
+    const [past, fix] = await Promise.all([fetchJSON(base), fetchJSON(base + '?fixture=true').catch(() => ({}))]);
+    const ev = [...(past.events || []), ...(fix.events || [])].map((e) => {
+      const g = espnGame(e);
+      const lg = POPULAR_LEAGUES.find((p) => p.id === e.league?.slug)?.name || e.league?.name || '';
+      // en la tarjeta se ve de qué torneo es cada partido
+      return { ...g, league: lg, slug: e.league?.slug || '', note: [lg, g.note].filter(Boolean).join(' · ') };
+    });
+    const uniq = [...new Map(ev.map((e) => [e.id, e])).values()];
+    const t = past.team || fix.team || {};
+    return {
+      color1: hexOk(t.color), color2: hexOk(t.alternateColor), standing: t.standingSummary || '', record: t.recordSummary || '',
+      upcoming: uniq.filter((e) => e.state !== 'post').sort((a, b) => a.ts.localeCompare(b.ts)).slice(0, 8),
+      results: uniq.filter((e) => e.state === 'post').sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, 8),
+    };
+  }, force);
+}
+
+// Fechas con partidos de una liga (para el calendario) y los partidos de la jornada actual
+export async function soccerCalendar(slug, { force = false } = {}) {
+  return cached('scal:' + slug, 6 * 3600e3, async () => {
+    const j = await fetchJSON(`${ESPN}/soccer/${slug}/scoreboard`);
+    const lg = j.leagues?.[0] || {};
+    const cal = lg.calendar || [];
+    const dates = typeof cal[0] === 'string' ? [...new Set(cal.map((d) => d.slice(0, 10)))] : [];
+    // en torneos por fases se usan los días de los partidos que trae la jornada
+    const evDates = (j.events || []).map((e) => e.date.slice(0, 10));
+    return { name: lg.name || '', season: lg.season?.type?.name || lg.season?.displayName || '', dates: [...new Set([...dates, ...evDates])].sort() };
+  }, force);
+}
+
+const STAT_ES = {
+  possessionPct: 'Posesión', totalShots: 'Tiros', shotsOnTarget: 'Tiros al arco', wonCorners: 'Tiros de esquina', foulsCommitted: 'Faltas',
+  yellowCards: 'Amarillas', redCards: 'Rojas', offsides: 'Fueras de lugar', saves: 'Atajadas', accuratePasses: 'Pases completos', totalPasses: 'Pases',
+};
+const POS_ES = { G: 'POR', D: 'DEF', M: 'MED', F: 'DEL' };
+// Detalle de un partido: goles, tarjetas, cambios, alineaciones y estadísticas
+export async function soccerSummary(eventId, { force = false, live = false } = {}) {
+  return cached('ssum:' + eventId, live ? 60e3 : 6 * 3600e3, async () => {
+    const j = await fetchJSON(`${ESPN}/soccer/all/summary?event=${eventId}`);
+    const teamIds = (j.header?.competitions?.[0]?.competitors || []).map((c) => ({ id: c.team?.id, ha: c.homeAway }));
+    const side = (id) => teamIds.find((t) => t.id === id)?.ha || '';
+    const events = (j.keyEvents || []).map((k) => {
+      const tx = k.type?.text || '';
+      const kind = /own goal/i.test(tx) || /own goal/i.test(k.text || '') ? 'og' : /penalty.*(missed|saved)/i.test(tx) ? 'penmiss' : /goal|penalty - scored/i.test(tx) ? 'goal' : /red card/i.test(tx) ? 'red' : /yellow/i.test(tx) ? 'yellow' : /substitution/i.test(tx) ? 'sub' : /halftime/i.test(tx) ? 'ht' : '';
+      const ps = (k.participants || []).map((p) => p.athlete?.displayName).filter(Boolean);
+      return { kind, min: k.clock?.displayValue || '', side: side(k.team?.id), a: ps[0] || '', b: ps[1] || '', pen: /penalty/i.test(tx) || /penalty/i.test(k.text || '') };
+    }).filter((e) => e.kind);
+    const rosters = (j.rosters || []).map((r) => {
+      const pl = (r.roster || []).map((p) => ({
+        name: p.athlete?.displayName || '', num: p.jersey || '', pos: p.position?.abbreviation || '', starter: !!p.starter,
+        inn: !!p.subbedIn, out: !!p.subbedOut,
+        goals: +((p.stats || []).find((s) => s.name === 'totalGoals')?.value || 0),
+      }));
+      return { side: r.homeAway || side(r.team?.id), team: r.team?.displayName || '', formation: r.formation || '', starters: pl.filter((p) => p.starter), bench: pl.filter((p) => !p.starter) };
+    });
+    const stats = {};
+    for (const t of j.boxscore?.teams || []) {
+      const ha = t.homeAway || side(t.team?.id);
+      for (const s of t.statistics || []) {
+        if (!STAT_ES[s.name]) continue;
+        stats[s.name] = stats[s.name] || { label: STAT_ES[s.name] };
+        stats[s.name][ha] = s.displayValue;
+      }
+    }
+    const gi = j.gameInfo || {};
+    return {
+      events, rosters, stats: Object.keys(STAT_ES).filter((k) => stats[k]).map((k) => ({ key: k, ...stats[k] })),
+      venue: gi.venue?.fullName || '', city: [gi.venue?.address?.city, gi.venue?.address?.country].filter(Boolean).join(', '),
+      attendance: gi.attendance || 0, referee: (gi.officials || [])[0]?.displayName || '',
+    };
+  }, force);
+}
+export function posEs(p = '') {
+  const x = p.toUpperCase().split('-')[0];
+  if (x === 'G' || x === 'GK') return 'POR';
+  if (/^(CD|CB|LB|RB|D|WB|LWB|RWB|SW)$/.test(x)) return 'DEF';
+  if (/^(DM|CM|LM|RM|AM|M|CDM|CAM)$/.test(x)) return 'MED';
+  if (/^(F|CF|ST|LW|RW|W|S|SS)$/.test(x)) return 'DEL';
+  return POS_ES[x[0]] || p;
+}
+
