@@ -290,6 +290,48 @@ export function analyzeUrl(raw) {
   return { parsed, existing: findWorkForLink(parsed, S.works) };
 }
 
+// ---------- búsqueda por parecido ----------
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+// 0 = no se parece · 100 = idéntico. Tolera letras de más/menos y palabras sueltas.
+export function matchScore(query, text) {
+  const q = normKey(query), t = normKey(text);
+  if (!q || !t) return 0;
+  if (t === q) return 100;
+  if (t.startsWith(q)) return 92;
+  const words = String(text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.some((w) => w.startsWith(q))) return 85;
+  if (t.includes(q)) return 75;
+  let i = 0;
+  for (const c of t) if (c === q[i]) i++;
+  if (i === q.length && q.length >= 3) return 55 + Math.round((q.length / t.length) * 10);
+  if (q.length >= 3) {
+    // errores de escritura: compara con trozos del mismo largo
+    let best = Infinity;
+    const L = q.length;
+    for (let k = 0; k + L - 1 <= t.length && best > 0; k++) best = Math.min(best, lev(q, t.slice(k, k + L + 1)), lev(q, t.slice(k, k + L)));
+    const sim = 1 - best / L;
+    if (sim >= 0.66) return Math.round(25 + sim * 25);
+  }
+  return 0;
+}
+export function workScore(w, q) {
+  return Math.max(matchScore(q, w.title), ...(w.aliases || []).map((a) => matchScore(q, a) - 3), 0);
+}
+export function searchWorks(q, limit = 8) {
+  if (!normKey(q)) return [];
+  return S.works.map((w) => [w, workScore(w, q)]).filter(([, sc]) => sc > 0).sort((a, b) => b[1] - a[1] || b[0].updatedAt - a[0].updatedAt).slice(0, limit).map(([w]) => w);
+}
+
 // ---------- filtros ----------
 export function filteredWorks(base = S.works) {
   const f = S.filters;
@@ -299,9 +341,10 @@ export function filteredWorks(base = S.works) {
     if (f.status !== 'all' && w.status !== f.status) return false;
     if (f.fav && !w.favorite) return false;
     if (f.platform !== 'all' && !platformsOf(w).includes(f.platform)) return false;
-    if (q && !normKey(w.title).includes(q) && !(w.aliases || []).some((a) => normKey(a).includes(q))) return false;
+    if (q && !workScore(w, f.q)) return false;
     return true;
   });
+  if (q) return list.sort((a, b) => workScore(b, f.q) - workScore(a, f.q));
   const sort = S.settings.sort;
   const by = {
     updated: (a, b) => b.updatedAt - a.updatedAt,

@@ -1,6 +1,6 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
+import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
@@ -8,7 +8,7 @@ import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImp
 import { renderFootball } from './football.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.8.0';
+export const APP_VERSION = '1.9.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -139,10 +139,14 @@ async function renderHome(root) {
   </header>
   ${showInstallHint() ? `<div class="banner install-hint"><span>📲 Instala la app en tu ${isIOS() ? 'iPhone' : 'teléfono'} para usarla a pantalla completa.</span><button class="btn sm" id="ih-how">Cómo</button><button class="icon-btn xs" id="ih-x" aria-label="Ocultar">${ICONS.close}</button></div>` : ''}
   ${showBackup ? `<div class="banner warn"><span>💾 ${backupDays == null ? 'Aún no has hecho un respaldo.' : `Tu último respaldo fue ${relTime(S.settings.lastBackup)}.`}</span><a href="#/ajustes" class="btn sm">Respaldar</a></div>` : ''}
-  <div class="searchbar">
-    <span class="ic">${ICONS.search}</span>
-    <input id="q" type="search" placeholder="Buscar por nombre…" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search">
-    <button class="paste-btn" id="paste-btn">${ICONS.link}<span>Pegar link</span></button>
+  <div class="search-wrap">
+    <div class="searchbar">
+      <span class="ic">${ICONS.search}</span>
+      <input id="q" type="search" placeholder="Buscar en tu biblioteca…" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="suggest">
+      <button class="icon-btn xs q-clear ${f.q ? '' : 'hidden'}" id="q-clear" aria-label="Borrar búsqueda">${ICONS.close}</button>
+      <button class="paste-btn" id="paste-btn">${ICONS.link}<span>Pegar link</span></button>
+    </div>
+    <div class="suggest" id="suggest" role="listbox" hidden></div>
   </div>
   ${spot && !f.q ? spotlightHTML(spot) : ''}
   ${total >= 2 && !f.q ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>Deja que la suerte elija qué leer o ver</small></span>${ICONS.sparkle}</button>` : ''}
@@ -185,7 +189,38 @@ async function renderHome(root) {
   renderGrid();
 
   const q = $('#q', root);
-  q.addEventListener('input', debounce(() => { f.q = q.value; renderGrid(); }, 160));
+  const sug = $('#suggest', root);
+  const showSuggest = () => {
+    const v = q.value.trim();
+    $('#q-clear', root).classList.toggle('hidden', !v);
+    if (!v) { sug.hidden = true; q.setAttribute('aria-expanded', 'false'); return; }
+    const found = searchWorks(v, 6);
+    const all = filteredWorks().length;
+    sug.innerHTML = (found.length ? found.map((w, i) => `<button class="sg-item" role="option" data-open-work="${w.id}" style="--i:${i}">
+        ${coverHTML(w, 'xs')}
+        <span class="sg-text"><b>${esc(w.title)}</b><small>${TYPES[w.type].emoji} ${TYPES[w.type].label} · ${esc(progressLabel(w) || statusLabel(w.status, w.type))}</small></span>
+        <span class="sdot" style="--c:${STATUSES[w.status]?.color}"></span></button>`).join('')
+      : `<div class="sg-empty">No tienes nada parecido a "<b>${esc(v)}</b>".</div>`)
+      + `<div class="sg-foot">${all > 0 ? `<button class="link-btn small" data-sg="all">Ver ${all} ${all === 1 ? 'resultado' : 'resultados'} abajo</button>` : ''}<button class="link-btn small" data-sg="add">＋ Agregar "${esc(v.slice(0, 30))}"</button></div>`;
+    sug.hidden = false;
+    q.setAttribute('aria-expanded', 'true');
+  };
+  q.addEventListener('input', debounce(() => { f.q = q.value; renderGrid(); showSuggest(); }, 140));
+  q.addEventListener('focus', () => { if (q.value.trim()) showSuggest(); });
+  q.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { sug.hidden = true; q.blur(); }
+    if (e.key === 'Enter') { const first = sug.querySelector('[data-open-work]'); if (first && !sug.hidden) first.click(); }
+  });
+  q.addEventListener('blur', () => setTimeout(() => { if (!sug.contains(document.activeElement)) sug.hidden = true; }, 180));
+  sug.addEventListener('pointerdown', (e) => e.preventDefault()); // no cerrar antes del toque
+  sug.addEventListener('click', (e) => {
+    const it = e.target.closest('[data-open-work]');
+    if (it) { sug.hidden = true; vibrate(8); go('#/obra/' + it.dataset.openWork); return; }
+    const a = e.target.closest('[data-sg]');
+    if (a?.dataset.sg === 'all') { sug.hidden = true; q.blur(); $('#grid', root).scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }); }
+    if (a?.dataset.sg === 'add') { sug.hidden = true; q.blur(); openEditor(null, { prefill: { title: q.value.trim() } }); }
+  });
+  $('#q-clear', root).onclick = () => { q.value = ''; f.q = ''; renderGrid(); showSuggest(); q.focus(); };
   $('#paste-btn', root).onclick = () => openPasteSheet();
   $('#type-chips', root).addEventListener('click', (e) => {
     const c = e.target.closest('[data-type]');
@@ -219,6 +254,13 @@ async function renderHome(root) {
   $('#ih-how', root)?.addEventListener('click', () => { if (!promptInstall()) openInstallHelp(); });
   $('#ih-x', root)?.addEventListener('click', async (e) => { e.currentTarget.closest('.banner').remove(); await setPref('installHint', Date.now()); });
   root.addEventListener('click', onContinueClick);
+  // toda la tarjeta destacada (y cada elemento del carrusel) abre la obra, no solo la portada
+  root.querySelectorAll('.spotlight, .c-item').forEach((card) => card.addEventListener('click', (e) => {
+    if (e.target.closest('button, a')) return;
+    const cover = card.querySelector('.cover');
+    if (cover && document.startViewTransition) { clearVTNames(); cover.style.viewTransitionName = 'vt-cover'; }
+    go('#/obra/' + card.dataset.id);
+  }));
   $('#next-pick', root)?.addEventListener('click', openRoulette);
   // al volver del detalle, la portada regresa a su tarjeta
   if (lastDetailId) {
@@ -238,7 +280,7 @@ function spotlightHTML(w) {
   const t = continueTarget(w);
   const pct = progressPct(w);
   const C = 2 * Math.PI * 26;
-  return `<section class="spotlight" data-id="${w.id}">
+  return `<section class="spotlight" data-id="${w.id}" role="link" tabindex="0" aria-label="Abrir ${esc(w.title)}">
     <div class="sp-bg">${w.cover ? `<img src="${esc(w.cover)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
     <a href="#/obra/${w.id}" class="sp-cover" aria-label="${esc(w.title)}">${coverHTML(w)}</a>
     <div class="sp-info">
@@ -325,6 +367,7 @@ function openQuickActions(el) {
     <div class="field"><span>Cambiar estado</span><div class="chips wrap" id="qa-status">
       ${Object.entries(STATUSES).map(([k, st]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
     </div></div>
+    ${isTrackOnly(w) ? `<div class="field"><span>Dónde la veo</span><div class="chips wrap" id="qa-plat">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${k}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div></div>` : ''}
     <div class="qa-grid">
       <button class="qa-btn ${w.favorite ? 'on' : ''}" id="qa-fav">${ICONS.heart}<span>${w.favorite ? 'Quitar favorito' : 'Favorito'}</span></button>
       <button class="qa-btn" id="qa-open">${ICONS.eye}<span>Ver detalle</span></button>
@@ -340,6 +383,16 @@ function openQuickActions(el) {
     $$('#qa-status .chip', s.el).forEach((x) => x.classList.toggle('on', x === c));
     vibrate(10);
     if (w.status === 'terminado') { const r = c.getBoundingClientRect(); confetti(r.left + r.width / 2, r.top); }
+    setTimeout(() => { s.close(); render({ keepScroll: true }); }, 350);
+  });
+  $('#qa-plat', s.el)?.addEventListener('click', async (e) => {
+    const c = e.target.closest('[data-plat]');
+    if (!c) return;
+    w.platform = w.platform === c.dataset.plat ? '' : c.dataset.plat;
+    await saveWork(w);
+    $$('#qa-plat .chip', s.el).forEach((x) => x.classList.toggle('on', x.dataset.plat === w.platform));
+    vibrate(10);
+    toast(w.platform ? `${w.title} → ${PLATFORMS[w.platform].name}` : 'Plataforma quitada', { icon: '📺' });
     setTimeout(() => { s.close(); render({ keepScroll: true }); }, 350);
   });
   $('#qa-fav', s.el).onclick = async () => { w.favorite = !w.favorite; await saveWork(w); vibrate(12); s.close(); render({ keepScroll: true }); toast(w.favorite ? 'Agregada a favoritos' : 'Quitada de favoritos', { icon: w.favorite ? '❤️' : '🤍' }); };

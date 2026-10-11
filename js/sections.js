@@ -1,6 +1,6 @@
 // Secciones: plataformas, fútbol, estadísticas, ajustes (respaldo) e importación de marcadores.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, readFile, download, relTime, hueOf, initials, coverHTML, vibrate } from './ui.js';
-import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed } from './store.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
 import { ATTRIBUTION, searchInfo } from './api.js';
 import { db } from './db.js';
@@ -18,31 +18,111 @@ const pageHeader = (title, sub = '') => `
   </header>`;
 
 // ======================= PLATAFORMAS =======================
+const NONE_KEY = 'ninguna';
+function platformWorks(key) {
+  if (key === NONE_KEY) return S.works.filter((w) => TRACK_ONLY.includes(w.type) && !platformsOf(w).length);
+  return S.works.filter((w) => platformsOf(w).includes(key));
+}
+const PLAT_DESC = { netflix: 'Series y películas', prime: 'Series y películas', disney: 'Series y películas', hbo: 'Series y películas', youtube: 'Videos y series', crunchyroll: 'Anime', web: 'Manhwas y mangas', [NONE_KEY]: 'Series y películas sin elegir' };
+
+function statusBar(list) {
+  if (!list.length) return '<div class="sbar empty"></div>';
+  return `<div class="sbar">${Object.entries(STATUSES).map(([k, st]) => { const n = list.filter((w) => w.status === k).length; return n ? `<i style="--c:${st.color};flex:${n}" title="${st.label}: ${n}"></i>` : ''; }).join('')}</div>`;
+}
+function coverStack(list) {
+  const withCover = [...list].sort((a, b) => (b.lastOpened || b.updatedAt) - (a.lastOpened || a.updatedAt)).slice(0, 3);
+  return `<div class="pstack">${withCover.map((w, i) => `<span style="--k:${i}">${coverHTML(w)}</span>`).join('')}</div>`;
+}
+
 export function renderPlatforms(root) {
-  const count = (k) => S.works.filter((w) => platformsOf(w).includes(k)).length;
-  root.innerHTML = `${pageHeader('Plataformas', 'Dónde ves y lees cada cosa')}
-  <div class="plat-grid">
-    ${[...STREAMING, 'web'].map((k, i) => {
-      const p = PLATFORMS[k], n = count(k);
-      return `<a href="#/plataforma/${k}" class="plat-tile" style="--c:${p.color};--i:${i}">
-        <span class="plat-glyph">${k === 'web' ? ICONS.book : ICONS.play}</span>
-        <span class="plat-name">${esc(p.name)}</span>
-        <span class="plat-count">${n} ${n === 1 ? 'obra' : 'obras'}</span>
+  const keys = [...STREAMING, 'web'];
+  const none = platformWorks(NONE_KEY);
+  const used = keys.filter((k) => platformWorks(k).length);
+  const inPlat = new Set(keys.flatMap((k) => platformWorks(k).map((w) => w.id)));
+  const active = [...inPlat].map(getWorkById).filter((w) => w && ['viendo', 'emision'].includes(w.status)).length;
+  const sorted = [...keys].sort((a, b) => platformWorks(b).length - platformWorks(a).length);
+  root.innerHTML = `${pageHeader('📺 Plataformas', 'Dónde ves y lees cada cosa')}
+  <section class="plat-summary">
+    <div><b data-count="${inPlat.size}">${inPlat.size}</b><small>obras con plataforma</small></div>
+    <div><b data-count="${used.length}">${used.length}</b><small>plataformas en uso</small></div>
+    <div><b data-count="${active}">${active}</b><small>en curso</small></div>
+  </section>
+  ${none.length ? `<a href="#/plataforma/${NONE_KEY}" class="banner warn plat-none"><span>🤔 ${none.length} ${none.length === 1 ? 'serie o película no tiene' : 'series o películas no tienen'} plataforma. Tócalo para elegirla.</span><b>›</b></a>` : ''}
+  <div class="plat-grid2">
+    ${sorted.map((k, i) => {
+      const p = PLATFORMS[k], list = platformWorks(k);
+      const going = list.filter((w) => ['viendo', 'emision'].includes(w.status)).length;
+      return `<a href="#/plataforma/${k}" class="ptile ${list.length ? '' : 'is-empty'}" style="--c:${p.color};--i:${i}">
+        <div class="ptile-top"><span class="plat-glyph">${k === 'web' ? ICONS.book : ICONS.play}</span>${list.length ? coverStack(list) : ''}</div>
+        <b class="ptile-name">${esc(p.name)}</b>
+        <small class="ptile-desc">${list.length ? `${list.length} ${list.length === 1 ? 'obra' : 'obras'}${going ? ` · ${going} en curso` : ''}` : PLAT_DESC[k]}</small>
+        ${statusBar(list)}
       </a>`;
     }).join('')}
-  </div>`;
+  </div>
+  <p class="muted small center pad">Toca una plataforma para ver todo lo que tienes ahí. En series y películas la plataforma se elige dentro de cada obra.</p>`;
+  animateCounts(root);
 }
 
 export function renderPlatform(root, key) {
-  const p = PLATFORMS[key] || PLATFORMS.web;
-  const list = S.works.filter((w) => platformsOf(w).includes(key)).sort((a, b) => b.updatedAt - a.updatedAt);
-  const groups = Object.keys(STATUSES).map((st) => [st, list.filter((w) => w.status === st)]).filter(([, l]) => l.length);
+  const isNone = key === NONE_KEY;
+  const p = isNone ? { name: 'Sin plataforma', color: '#64748b' } : (PLATFORMS[key] || PLATFORMS.web);
+  const list = platformWorks(key).sort((a, b) => b.updatedAt - a.updatedAt);
+  const going = list.filter((w) => ['viendo', 'emision'].includes(w.status));
+  const done = list.filter((w) => w.status === 'terminado').length;
+  const progressSum = list.reduce((s2, w) => s2 + (w.type === 'serie' ? Math.max(w.progress.watched || 0, w.progress.episode || 0) : w.type === 'pelicula' ? 0 : Math.floor(w.progress.chapter || 0)), 0);
+  let filter = 'all';
   root.innerHTML = `${backHeader(esc(p.name), `${list.length} ${list.length === 1 ? 'obra' : 'obras'}`, '#/plataformas')}
-  <div class="plat-hero" style="--c:${p.color}"><span>${key === 'web' ? ICONS.book : ICONS.play}</span><b>${esc(p.name)}</b></div>
-  ${list.length ? groups.map(([st, l]) => `<h2 class="group-title"><span class="sdot" style="--c:${STATUSES[st].color}"></span>${STATUSES[st].label} <em>${l.length}</em></h2>
-    <div class="grid">${l.map((w, i) => cardHTML(w, i)).join('')}</div>`).join('')
-    : `<div class="empty small"><h3>Nada en ${esc(p.name)} todavía</h3><p class="muted">Cuando agregues un link de ${esc(p.name)} a una obra aparecerá aquí.</p></div>`}`;
+  <section class="plat-hero2" style="--c:${p.color}">
+    <div class="ph-glow"></div>
+    <div class="ph-row"><span class="plat-glyph big">${isNone ? '🤔' : key === 'web' ? ICONS.book : ICONS.play}</span><div><h2>${esc(p.name)}</h2><small>${PLAT_DESC[key] || ''}</small></div></div>
+    <div class="ph-stats">
+      <div><b data-count="${list.length}">${list.length}</b><small>obras</small></div>
+      <div><b data-count="${going.length}">${going.length}</b><small>en curso</small></div>
+      <div><b data-count="${done}">${done}</b><small>terminadas</small></div>
+      <div><b data-count="${progressSum}">${progressSum}</b><small>${key === 'web' ? 'capítulos' : 'cap./ep.'}</small></div>
+    </div>
+    ${statusBar(list)}
+  </section>
+  ${isNone && list.length ? '<p class="note" style="margin:0 16px 10px">Abre cada una y elige en "Dónde la veo" su plataforma, o mantén presionada la tarjeta.</p>' : ''}
+  ${going.length > 1 ? `<section class="continue"><div class="sec-head"><h2>En curso aquí</h2></div><div class="carousel">${going.map((w, i) => `
+    <div class="c-item" data-id="${w.id}" style="--i:${i}"><a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}</a><div class="c-title">${esc(w.title)}</div><div class="c-row"><span class="muted small">${esc(progressLabel(w))}</span></div></div>`).join('')}</div></section>` : ''}
+  ${list.length ? `<div class="chips scroll-x pf-chips" id="pf-chips">
+      <button class="chip on" data-pf="all">Todas <em>${list.length}</em></button>
+      ${Object.entries(STATUSES).map(([k, st]) => { const n = list.filter((w) => w.status === k).length; return n ? `<button class="chip" data-pf="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, list[0].type)} <em>${n}</em></button>` : ''; }).join('')}
+    </div>
+    <div class="grid" id="pf-grid"></div>`
+    : `<div class="empty small"><div class="empty-art"><span>${isNone ? '🎉' : '📭'}</span></div><h3>${isNone ? 'Todas tus series y películas tienen plataforma' : `Nada en ${esc(p.name)} todavía`}</h3><p class="muted">${isNone ? '' : key === 'web' ? 'Agrega el link de donde lees un manhwa o manga y aparecerá aquí.' : `Elige ${esc(p.name)} en "Dónde la veo" al agregar una serie o película.`}</p>${isNone ? '' : '<button class="btn primary" id="pf-add">＋ Agregar</button>'}</div>`}`;
+  const draw = () => {
+    const g = $('#pf-grid', root);
+    if (!g) return;
+    const l = filter === 'all' ? list : list.filter((w) => w.status === filter);
+    g.innerHTML = l.map((w, i) => cardHTML(w, i)).join('');
+  };
+  draw();
+  $('#pf-chips', root)?.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-pf]');
+    if (!c) return;
+    filter = c.dataset.pf;
+    $$('#pf-chips .chip', root).forEach((x) => x.classList.toggle('on', x === c));
+    vibrate(6);
+    draw();
+  });
+  $('#pf-add', root)?.addEventListener('click', () => import('./editor.js').then((m) => m.openAddChooser()));
+  root.querySelectorAll('.c-item').forEach((card) => card.addEventListener('click', (e) => { if (!e.target.closest('a, button')) go('#/obra/' + card.dataset.id); }));
+  animateCounts(root);
 }
+
+function animateCounts(root) {
+  $$('[data-count]', root).forEach((el) => {
+    const target = +el.dataset.count;
+    if (document.documentElement.dataset.motion === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches || !target) { el.textContent = target.toLocaleString('es'); return; }
+    const t0 = performance.now(), dur = 800;
+    const step = (t) => { const k = Math.min(1, (t - t0) / dur); el.textContent = Math.round(target * (1 - Math.pow(1 - k, 3))).toLocaleString('es'); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+const getWorkById = (id) => S.works.find((w) => w.id === id);
 
 // ======================= ESTADÍSTICAS =======================
 export function todayCount() {
