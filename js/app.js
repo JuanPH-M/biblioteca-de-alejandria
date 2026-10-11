@@ -1,6 +1,6 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, applyLinkToWork, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
+import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
@@ -8,7 +8,7 @@ import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImp
 import { renderFootball } from './football.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.7.0';
+export const APP_VERSION = '1.8.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -429,6 +429,7 @@ function checkReturn() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(checkReturn, 400); });
 
 export function openCheckIn(w, p = { mode: 'manual' }) {
+  if (needsLink(w)) return openLinkFirst(w, p);
   const t = TYPES[w.type];
   const cur = currentNumber(w);
   let val = p.expect ?? (p.mode === 'last' || p.mode === 'manual' ? cur : cur + 1);
@@ -491,6 +492,91 @@ export function openCheckIn(w, p = { mode: 'manual' }) {
   setTimeout(() => { input.focus(); input.select(); }, 380);
 }
 
+// Paso 1: link del último capítulo · Paso 2: qué número es
+export function openLinkFirst(w, p = { mode: 'manual' }) {
+  const t = TYPES[w.type];
+  const cur = currentNumber(w);
+  const saved = (w.links || [])[0]?.url || '';
+  const verb = t.reading ? 'leíste' : 'viste';
+  const s = openSheet(`
+    <div class="ci-head">${coverHTML(w, 'xs')}<div class="grow"><small>${p.mode === 'manual' ? 'Nuevo ' + t.unitLong : `Volviste de ${t.reading ? 'leer' : 'ver'}`}</small><h3>${esc(w.title)}</h3></div></div>
+    <div class="lf-dots"><i class="on"></i><i></i></div>
+    <div id="lf-1" class="lf-step">
+      <p class="ci-q">1. Pega el link del último ${t.unitLong} que ${verb}</p>
+      <div class="field-row"><input id="lf-url" type="url" inputmode="url" placeholder="https://…" autocomplete="off"><button class="btn sm" id="lf-paste">Pegar</button></div>
+      <p class="lf-msg muted small" id="lf-msg">Ábrelo en la página, copia el link de la barra de direcciones y pégalo aquí.</p>
+      <div class="row-btns"><button class="btn ghost" id="lf-cancel">${p.mode === 'manual' ? 'Cancelar' : 'No leí nada'}</button><button class="btn primary" id="lf-next" disabled>Siguiente →</button></div>
+    </div>
+    <div id="lf-2" class="lf-step" hidden>
+      <p class="ci-q">2. ¿Qué ${t.unitLong} es este link?</p>
+      <div class="lf-prev" id="lf-prev"></div>
+      <div class="ci-stepper">
+        <button class="cbtn minus" data-ci="-1" aria-label="Uno menos">−</button>
+        <div class="ci-val"><input id="ci-n" type="number" inputmode="decimal" min="0" step="any" value="${cur + 1}" aria-label="${t.unitLong}"><small>antes: ${t.unit} ${cur}</small></div>
+        <button class="cbtn plus" data-ci="1" aria-label="Uno más">+</button>
+      </div>
+      <div class="chips center ci-quick">${[1, 2, 5, 10].map((n) => `<button class="chip" data-add="${n}">+${n}</button>`).join('')}</div>
+      <div class="row-btns"><button class="btn ghost" id="lf-back">← Cambiar link</button><button class="btn primary" id="lf-save">Guardar</button></div>
+    </div>`, { cls: 'checkin' });
+  const urlIn = $('#lf-url', s.el), msg = $('#lf-msg', s.el), next = $('#lf-next', s.el), num = $('#ci-n', s.el);
+  let parsed = null;
+  const validate = () => {
+    const v = urlIn.value.trim();
+    parsed = v ? parseLink(v, S.patterns) : null;
+    let ok = !!parsed && parsed.platform === 'web';
+    if (!v) msg.textContent = 'Ábrelo en la página, copia el link de la barra de direcciones y pégalo aquí.';
+    else if (!parsed) msg.textContent = '⚠️ Eso no parece un link válido.';
+    else if (parsed.platform !== 'web') { msg.textContent = '⚠️ Pega el link de la página donde lees.'; ok = false; }
+    else if (parsed.url === saved && !p.url) { msg.textContent = '⚠️ Es el mismo link que ya tenías guardado. Pega el del capítulo nuevo.'; ok = false; }
+    else msg.textContent = `✓ Link de ${parsed.host}`;
+    msg.classList.toggle('ok', ok);
+    next.disabled = !ok;
+    return ok;
+  };
+  urlIn.addEventListener('input', debounce(validate, 150));
+  $('#lf-paste', s.el).onclick = async () => {
+    try { urlIn.value = (await navigator.clipboard.readText()).trim(); validate(); }
+    catch { urlIn.focus(); toast('Mantén presionado el campo y elige "Pegar".'); }
+  };
+  const goStep = (n) => {
+    $('#lf-1', s.el).hidden = n !== 1;
+    $('#lf-2', s.el).hidden = n !== 2;
+    $$('.lf-dots i', s.el).forEach((d, i) => d.classList.toggle('on', i < n));
+    if (n === 2) {
+      let shown = parsed.url; try { const u = new URL(parsed.url); shown = u.hostname.replace(/^www\./, '') + decodeURI(u.pathname); } catch { /* */ }
+      $('#lf-prev', s.el).innerHTML = `<span class="pbadge" style="--c:${PLATFORMS.web.color}">Link</span><span>${esc(shown)}</span>`;
+      if (parsed.chapter != null) num.value = parsed.chapter;
+      setTimeout(() => { num.focus(); num.select(); }, 250);
+    }
+  };
+  next.onclick = () => { if (validate()) goStep(2); };
+  $('#lf-back', s.el).onclick = () => goStep(1);
+  $('#lf-cancel', s.el).onclick = () => s.close();
+  const setVal = (v) => { num.value = Math.max(0, Math.round(v * 100) / 100); num.classList.remove('bump'); void num.offsetWidth; num.classList.add('bump'); vibrate(6); };
+  $('#lf-2', s.el).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ci]');
+    if (b) setVal((parseFloat(num.value) || 0) + +b.dataset.ci);
+    const a = e.target.closest('[data-add]');
+    if (a) setVal(cur + +a.dataset.add);
+  });
+  $('#lf-save', s.el).onclick = async () => {
+    const n = parseFloat(num.value);
+    if (isNaN(n) || n < 0) { toast('Escribe el número del ' + t.unitLong + '.'); return; }
+    await applyLinkToWork(w, parsed);
+    if (n !== currentNumber(w)) await setProgress(w, { chapter: n });
+    if (w.status === 'pendiente' && n > 0) { w.status = 'viendo'; await saveWork(w); }
+    s.close();
+    vibrate(15);
+    const gained = currentNumber(w) - cur;
+    if (gained > 0) confetti(innerWidth / 2, innerHeight * 0.45, Math.min(40, 10 + gained * 2));
+    toast(`${w.title}: ${progressLabel(w)} · link guardado`, { icon: '✅' });
+    if (w.total && currentNumber(w) >= w.total && w.status !== 'terminado') finishPrompt(w);
+    render({ keepScroll: true });
+  };
+  if (p.url) { urlIn.value = p.url; if (validate()) goStep(2); }
+  else setTimeout(() => urlIn.focus(), 380);
+}
+
 // ---------- detalle ----------
 function starsHTML(rating) {
   return `<div class="stars" role="radiogroup" aria-label="Calificación">${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= rating ? 'on' : ''}" data-star="${n}" role="radio" aria-checked="${n === rating}" aria-label="${n} estrellas">${ICONS.star}</button>`).join('')}</div>`;
@@ -531,6 +617,20 @@ function counterHTML(w) {
   }
   const n = currentNumber(w);
   const pct = w.total ? Math.min(100, (n / w.total) * 100) : null;
+  if (needsLink(w)) {
+    return `<section class="panel counter-panel">
+      <div class="counter locked">
+        <div class="cval">
+          <small>${t.unitLong[0].toUpperCase() + t.unitLong.slice(1)}</small>
+          <button class="num" id="num" aria-label="Actualizar con el link">${n}</button>
+          <small>${w.total ? `de ${w.total}` : 'según tu último link'}</small>
+        </div>
+        <button class="cbtn plus lf-btn" id="lf-open" aria-label="Registrar nuevo capítulo"><span>🔗</span><b>Nuevo ${t.unitLong}</b><small>pega su link</small></button>
+      </div>
+      ${pct != null ? `<div class="pbar"><i style="width:${pct}%"></i></div><div class="muted small center">${Math.round(pct)}% completado</div>` : ''}
+      <p class="lf-note">🔒 En este sitio el link no dice el número del ${t.unitLong}. Para avanzar, pega primero el link del último ${t.unitLong} que ${t.reading ? 'leíste' : 'viste'} y luego elige qué número es; así el contador y el link nunca se desfasan.</p>
+    </section>`;
+  }
   return `<section class="panel counter-panel">
     <div class="counter">
       <button class="cbtn minus" data-step="-1" aria-label="Restar uno">−1</button>
@@ -696,7 +796,8 @@ async function renderDetail(root, id) {
     updatePbar(w, root);
     if (w.justFinished) { delete w.justFinished; finishPrompt(w); }
   }));
-  $('#num', root)?.addEventListener('click', (e) => editNumber(w, e.currentTarget, root));
+  $('#num', root)?.addEventListener('click', (e) => (needsLink(w) ? openLinkFirst(w, { mode: 'manual' }) : editNumber(w, e.currentTarget, root)));
+  $('#lf-open', root)?.addEventListener('click', () => openLinkFirst(w, { mode: 'manual' }));
   root.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', async () => {
     await setProgress(w, { season: (w.progress.season || 1) + +b.dataset.season });
     refreshSeries(w, root, +b.dataset.season);

@@ -1,9 +1,9 @@
 // Editor de obras (agregar/editar) y hoja "Pegar link".
 import { $, $$, esc, openSheet, whenSettled, toast, debounce, imageToDataURL, ICONS, coverHTML, confetti, vibrate } from './ui.js';
-import { S, TYPES, STATUSES, TRACK_ONLY, statusLabel, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, needsLink, statusLabel, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
 import { PLATFORMS, STREAMING, parseLink, nextChapterUrl, KNOWN_SITES } from './links.js';
 import { searchInfo, ATTRIBUTION, tvmazeSeasons } from './api.js';
-import { render, go, openCheckIn } from './app.js';
+import { render, go, openCheckIn, openLinkFirst } from './app.js';
 
 // ---------- análisis visual de un link ----------
 // Devuelve HTML que explica qué se reconoció y permite elegir el número de capítulo.
@@ -137,7 +137,7 @@ export function openPasteSheet({ work = null, url = '' } = {}) {
       } else toast(res ? `${w.title}: ${progressLabel(w)}` : `Link guardado en ${w.title}`, { icon: '✅' });
       if (!work) go('#/obra/' + w.id); else render({ keepScroll: true });
       // el link no dice el capítulo: se pregunta hasta dónde llegaste
-      if (parsed.chapter == null && parsed.platform === 'web' && !TRACK_ONLY.includes(w.type)) whenSettled(() => setTimeout(() => openCheckIn(w, { mode: 'manual' }), 450));
+      if (parsed.chapter == null && parsed.platform === 'web' && !TRACK_ONLY.includes(w.type)) whenSettled(() => setTimeout(() => openLinkFirst(w, { mode: 'manual', url: parsed.url }), 450));
     } else if (e.target.closest('#pl-new')) {
       const p = parsed;
       s.close();
@@ -298,7 +298,8 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       </div></div>`;
     } else {
       box.innerHTML = `<div class="field"><span>Progreso</span><div class="grid2">
-        <label class="mini"><small>${TYPES[w.type].unitLong[0].toUpperCase() + TYPES[w.type].unitLong.slice(1)} actual</small><input type="number" min="0" step="any" inputmode="decimal" id="ed-chapter" value="${w.progress.chapter || 0}"></label>
+        <label class="mini"><small>${TYPES[w.type].unitLong[0].toUpperCase() + TYPES[w.type].unitLong.slice(1)} actual</small><input type="number" min="0" step="any" inputmode="decimal" id="ed-chapter" value="${w.progress.chapter || 0}" ${work && needsLink(work) ? 'disabled' : ''}></label>
+        ${work && needsLink(work) ? `<small class="muted lock-hint">🔒 Se actualiza desde la obra con "Nuevo ${TYPES[w.type].unitLong}" (link primero).</small>` : ''}
         <label class="mini"><small>Total (opcional)</small><input type="number" min="0" inputmode="numeric" id="ed-total" value="${w.total || ''}" placeholder="?"></label>
       </div></div>`;
     }
