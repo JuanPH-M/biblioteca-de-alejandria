@@ -99,10 +99,18 @@ Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UF
 - **📅 Próximos** y **🏁 Resultados**: toca un evento para ver toda la cartelera, quién ganó, por qué método (KO/TKO, sumisión o decisión), en qué asalto y el resumen en YouTube.
 
 **Fútbol**
-- **🛡️ Equipos**: toca **＋ Agregar equipo o selección**, búscalo y toca **Seguir**. Tus equipos aparecen como recuadros con su próximo partido; toca uno para ver sus próximos partidos y últimos resultados.
-- **🏆 Ligas**: toca **＋ Agregar liga o torneo** y elige entre las populares (Champions, Premier, La Liga, Liga BetPlay, **Torneo BetPlay – Primera B**, Copa Colombia, Libertadores…) o busca los torneos de un país. Al tocar una liga ves **Partidos**, **Tabla** y **Torneos** del mismo país.
+- **🛡️ Equipos**: toca **＋ Agregar equipo o selección**, búscalo (clubes de todo el mundo y selecciones) y toca **Seguir**. Cada recuadro muestra su próximo partido o el marcador en vivo. Al abrirlo ves su posición, la racha de los últimos 5 partidos y sus próximos partidos y resultados en **todas las competiciones** (liga, copa, Libertadores…).
+- **🏆 Ligas**: elige entre las populares (Liga BetPlay, Primera B, Copa Colombia, Champions, Premier, La Liga, Serie A, Bundesliga, Libertadores, Sudamericana, Liga MX, MLS, Mundial, Eliminatorias, Copa América…) o busca cualquier otra por nombre. Dentro de una liga:
+  - **Partidos**: el calendario completo de la temporada, fecha por fecha.
+  - **Tabla**: la tabla completa con PJ, G, E, P, diferencia de gol y puntos, y los colores de clasificación y descenso. Toca un equipo para seguirlo.
+  - **Torneos**: otros torneos del mismo país.
+- **📅 Hoy**: todos los partidos del día de tus ligas y equipos, con marcadores en vivo.
+- **Toca un partido** para ver:
+  - **Resumen**: goles con autor y asistencia, penales, autogoles, tarjetas y cambios minuto a minuto.
+  - **Alineaciones**: formación, titulares con número y posición, quién salió y suplentes que entraron.
+  - **Estadísticas**: posesión, tiros, tiros al arco, tiros de esquina, faltas, tarjetas, fueras de lugar, atajadas y pases.
+  - El estadio, el árbitro, la cuenta regresiva si aún no empieza y el **resumen en YouTube**.
 - **🛡️ Escudo propio**: dentro de un equipo o liga toca **Escudo** y pega el link de una imagen o elige una de tu galería. Se guarda solo en tu teléfono.
-- **Toca un partido** para ver el resultado, la fecha, el estadio y un botón para ver el **resumen en YouTube**.
 - Para quitar un equipo o una liga ábrelo y toca **Quitar**: la app siempre pide confirmación.
 
 ### 7. Notas
@@ -112,7 +120,13 @@ Cada obra tiene un espacio de **notas** que se guarda solo mientras escribes.
 Totales por tipo y estado, capítulos leídos, episodios vistos, películas vistas, favoritas, mapa de actividad, géneros favoritos y mejor calificadas.
 
 ### 9. Navegador para abrir los links
-En **Ajustes → Abrir los links con** eliges dónde se abren tus capítulos: el **navegador predeterminado**, **dentro de la app** o uno en particular: **Chrome, Brave, Firefox, Edge, DuckDuckGo** y además **Safari** en iPhone, u **Opera y Samsung Internet** en Android. Si el navegador elegido no está instalado, el link se abre en el normal. Usa **Probar con un link** para comprobarlo.
+En **Ajustes → Abrir los links con** eliges dónde se abren tus capítulos:
+- **Preguntar cada vez**: al abrir un link aparece la lista de navegadores y eliges en el momento (con la opción *Usar siempre este navegador*).
+- **Navegador predeterminado**. Con la app instalada, el teléfono lo abre en una ventana encima de la app.
+- **Dentro de la app**: en la misma ventana; vuelves con ←.
+- Un navegador en particular para **salir de la app** y abrir el link allí: **Chrome, Brave, Firefox, Edge, DuckDuckGo**, además de **Safari** en iPhone y **Opera y Samsung Internet** en Android.
+
+Las apps web no pueden ver qué navegadores tienes instalados (el teléfono no lo permite). Si eliges uno que no tienes, en Android el link se abre en el navegador normal y en iPhone aparece un aviso. Usa **Probar con un link** para comprobarlo.
 
 ### 10. Personalizar
 En **Ajustes → Apariencia** elige entre 10 colores (violeta, azul, cian, esmeralda, dorado, naranja, coral, rojo, rosa y **blanco**: fondo negro, letras blancas y botones blancos), negro puro AMOLED y la opción de reducir animaciones.
@@ -169,8 +183,8 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 
 ## ⚠️ Límites conocidos
 
-- **Deportes:** NBA, MLB y UFC usan los datos públicos de ESPN, que no tienen documentación oficial y podrían cambiar algún día.
-- **Fútbol:** los datos gratuitos de TheSportsDB no incluyen alineaciones completas ni goleadores, por eso cada partido muestra solo el resultado; la tabla de posiciones muestra los primeros puestos.
+- **Deportes:** fútbol, NBA, MLB y UFC usan los datos públicos de ESPN, que no tienen documentación oficial y podrían cambiar algún día.
+- **Fútbol:** algunos torneos pequeños (por ejemplo la Primera B) no tienen tabla de posiciones en los datos; sus partidos sí aparecen.
 - **Películas:** Wikipedia no da géneros y algunas películas pequeñas o muy nuevas pueden no tener póster.
 - **iPhone:** no hay "Compartir → Alejandría" desde Safari (Apple no lo permite en apps web) ni vibración; todo lo demás funciona igual.
 
@@ -185,10 +199,10 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 
 ## ⚖️ Atribuciones
 
-- La app no aloja ni muestra contenido de terceros: solo guarda y abre los links que tú agregas.
+- La app no aloja ni muestra contenido de terceros: solo guarda y abre los links que tú agregas. Los resúmenes de partidos se abren como búsqueda en YouTube.
 - Datos e imágenes de manhwa/manga/anime: **AniList**. Datos de series: **TVmaze** (CC BY-SA 4.0).
 - Textos de películas y series: **Wikipedia** (CC BY-SA 4.0).
-- Datos de fútbol: **TheSportsDB**. NBA, MLB y UFC: datos públicos de **ESPN**. Fórmula 1: **Jolpica F1** (continuación abierta de Ergast). No se muestran escudos ni logos de equipos, ligas o marcas: solo nombres e iniciales con colores.
+- Fútbol, NBA, MLB y UFC: datos públicos de **ESPN**. Fórmula 1: **Jolpica F1** (continuación abierta de Ergast). No se muestran escudos ni logos de equipos, ligas o marcas: solo nombres e iniciales con colores.
 
 ## 📄 Licencia
 

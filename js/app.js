@@ -1,6 +1,6 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
+import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
@@ -8,7 +8,7 @@ import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImp
 import { renderSports } from './sports.js';
 
 const view = $('#view');
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.1.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -462,6 +462,24 @@ function openQuickActions(el) {
   $('#qa-last', s.el)?.addEventListener('click', () => { doContinue(w, 'last'); s.close(); });
 }
 onLongPress(document, '.card, .c-item, .spotlight', openQuickActions);
+
+// "Preguntar cada vez": hoja para elegir en qué navegador abrir el link
+setBrowserPicker((url) => {
+  let host = url;
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* */ }
+  const s = openSheet(`<h3 class="sheet-title">¿Con qué lo abro?</h3>
+    <p class="muted small">${esc(host)}</p>
+    <div class="br-pick">${browserChoices().filter((k) => k !== 'ask').map((k, i) => `<button class="br-opt" data-pick="${k}" style="--i:${i}"><span class="br-emoji">${BROWSERS[k].emoji}</span><span class="grow"><b>${esc(BROWSERS[k].name)}</b></span></button>`).join('')}</div>
+    <label class="br-remember"><input type="checkbox" id="br-rem"> Usar siempre este navegador</label>`);
+  s.el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pick]');
+    if (!b) return;
+    const k = b.dataset.pick;
+    openUrl(url, { browser: k });
+    if ($('#br-rem', s.el).checked) { setPref('browser', k); toast(`Los links se abrirán siempre con ${BROWSERS[k].name}`, { icon: BROWSERS[k].emoji }); }
+    s.close();
+  });
+});
 
 function renderGrid() {
   const grid = $('#grid');

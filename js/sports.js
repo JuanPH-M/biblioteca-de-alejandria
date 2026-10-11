@@ -19,13 +19,13 @@ let sport = null;
 let liveTimer = null;
 
 // ---------- utilidades ----------
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const fmtTime = (ts) => new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-const fmtDay = (ts) => cap(new Date(ts).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }));
-const fmtLong = (ts) => cap(new Date(ts).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }));
+export const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+export const fmtTime = (ts) => new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+export const fmtDay = (ts) => cap(new Date(ts).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }));
+export const fmtLong = (ts) => cap(new Date(ts).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }));
 const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); x.setHours(12, 0, 0, 0); return x; };
-function dayLabel(d) {
+export const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); x.setHours(12, 0, 0, 0); return x; };
+export function dayLabel(d) {
   const t = new Date();
   if (sameDay(d, t)) return 'Hoy';
   if (sameDay(d, addDays(t, -1))) return 'Ayer';
@@ -39,7 +39,7 @@ function countdown(ts) {
   return d ? `${d} d ${h} h ${m} min` : h ? `${h} h ${m} min ${s} s` : `${m} min ${s} s`;
 }
 // Cuentas regresivas que se actualizan solas mientras están en pantalla
-function tickCountdowns(root) {
+export function tickCountdowns(root) {
   const els = $$('[data-cd]', root);
   if (!els.length) return;
   const up = () => els.forEach((el) => { el.textContent = countdown(el.dataset.cd); });
@@ -47,17 +47,20 @@ function tickCountdowns(root) {
   const t = setInterval(() => { if (!els[0].isConnected) { clearInterval(t); return; } up(); }, 1000);
 }
 // centra un elemento dentro de una fila con scroll horizontal (sin mover la página)
-function centerIn(row, el) {
+export function centerIn(row, el) {
   if (row && el) row.scrollLeft = el.offsetLeft - row.clientWidth / 2 + el.offsetWidth / 2;
 }
-const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-const loading = (txt = 'Cargando…') => `<div class="loading-row"><span class="spinner"></span> ${txt}</div>`;
-const errorBox = (txt = 'No se pudo cargar. Revisa tu conexión.') => `<p class="muted small center pad">${txt}</p>`;
-const updated = (r) => `<p class="muted xsmall center">${r.offline ? 'Sin conexión · ' : ''}Actualizado ${relTime(r.cachedAt)}</p>`;
+export const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+export const loading = (txt = 'Cargando…') => `<div class="loading-row"><span class="spinner"></span> ${txt}</div>`;
+export const errorBox = (txt = 'No se pudo cargar. Revisa tu conexión.') => `<p class="muted small center pad">${txt}</p>`;
+export const updated = (r) => `<p class="muted xsmall center">${r.offline ? 'Sin conexión · ' : ''}Actualizado ${relTime(r.cachedAt)}</p>`;
 
 // Escudo genérico: iniciales con los colores del equipo (nunca su logo)
-function avatar(t, size = '') {
+export function avatar(t, size = '') {
   const name = t.name || '?';
+  // escudo propio que subiste para ese equipo de fútbol
+  const mine = t.logo ? t : S.teams.find((x) => x.id === t.id && x.logo);
+  if (mine?.logo) return `<span class="team-av logo ${size}"><img src="${esc(mine.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('logo');this.remove()"></span>`;
   const c1 = t.color1 || `hsl(${hueOf(name)} 65% 42%)`;
   const c2 = t.color2 && t.color2.toLowerCase() !== t.color1?.toLowerCase() ? t.color2 : `hsl(${(hueOf(name) + 40) % 360} 65% 28%)`;
   const label = (t.short && t.short.length <= 4 ? t.short : initials(name)).toUpperCase();
@@ -65,7 +68,13 @@ function avatar(t, size = '') {
 }
 
 // Estado del partido en español
-function statusEs(g) {
+export function statusEs(g, sp = sport) {
+  if (sp === 'futbol') {
+    if (g.state === 'pre') return /postponed/i.test(g.detail) ? 'Aplazado' : /canceled|cancelled/i.test(g.detail) ? 'Cancelado' : fmtTime(g.ts);
+    if (g.state === 'post') return /pen/i.test(g.detail) ? 'Final (penales)' : /AET|ET/i.test(g.detail) ? 'Final (prórroga)' : /postponed/i.test(g.detail) ? 'Aplazado' : 'Final';
+    if (/HT|half/i.test(g.detail)) return 'Medio tiempo';
+    return g.clock && g.clock !== "0'" ? g.clock : g.detail;
+  }
   if (g.state === 'pre') {
     if (/postponed/i.test(g.detail)) return 'Aplazado';
     if (/canceled|cancelled/i.test(g.detail)) return 'Cancelado';
@@ -74,7 +83,7 @@ function statusEs(g) {
   if (g.state === 'post') {
     const extra = g.detail.match(/Final\/(OT|\d+)/i);
     if (!extra) return /postponed/i.test(g.detail) ? 'Aplazado' : 'Final';
-    return extra[1].toUpperCase() === 'OT' ? 'Final (prórroga)' : /\d/.test(extra[1]) && sport === 'mlb' ? `Final (${extra[1]} entradas)` : 'Final (prórroga)';
+    return extra[1].toUpperCase() === 'OT' ? 'Final (prórroga)' : /\d/.test(extra[1]) && sp === 'mlb' ? `Final (${extra[1]} entradas)` : 'Final (prórroga)';
   }
   const d = g.detail;
   if (/half/i.test(d)) return 'Medio tiempo';
@@ -91,7 +100,7 @@ const streakEs = (s = '') => s.replace(/^W/, 'G').replace(/^L/, 'P');
 
 // ---------- favoritos (NBA / MLB) ----------
 const favs = (sp) => (S.settings.sportFavs || {})[sp] || [];
-const isFav = (sp, id) => favs(sp).some((t) => t.id === id);
+const isFav = (sp, id) => (sp === 'futbol' ? S.teams : favs(sp)).some((t) => t.id === id);
 async function toggleFav(sp, team) {
   const all = { ...(S.settings.sportFavs || {}) };
   const list = favs(sp);
@@ -226,13 +235,13 @@ async function loadDay(v, sp, force = false) {
 }
 const isFavGame = (sp, g) => isFav(sp, g.home.id) || isFav(sp, g.away.id);
 
-function gameCard(g, sp, i = 0) {
+export function gameCard(g, sp, i = 0) {
   const done = g.state === 'post', live = g.state === 'in';
   const row = (t) => `<div class="gc-team ${done && t.winner ? 'win' : ''} ${done && !t.winner ? 'lose' : ''}">
       ${avatar(t, 'sm')}<span class="gc-name">${esc(t.name)}${isFav(sp, t.id) ? ' <i class="fav-star">★</i>' : ''}${t.record ? `<small>${esc(t.record)}</small>` : ''}</span>
-      ${done || live ? `<b class="gc-score">${esc(t.score)}</b>` : ''}</div>`;
+      ${done || live ? `<b class="gc-score">${esc(t.score)}${t.pen !== '' && t.pen != null ? `<small> (${esc(t.pen)})</small>` : ''}</b>` : ''}</div>`;
   return `<button class="game-card ${live ? 'is-live' : ''} ${isFavGame(sp, g) ? 'is-fav' : ''}" data-game="${g.id}" style="--i:${Math.min(i, 12)}">
-    <div class="gc-top"><span class="gc-status ${live ? 'live' : done ? 'done' : ''}">${live ? '<i class="live-dot"></i> ' : ''}${esc(statusEs(g))}</span>${g.note ? `<span class="gc-note">${esc(g.note)}</span>` : ''}</div>
+    <div class="gc-top"><span class="gc-status ${live ? 'live' : done ? 'done' : ''}">${live ? '<i class="live-dot"></i> ' : ''}${esc(statusEs(g, sp))}${sp === 'futbol' && !done && !live ? ` · ${esc(fmtDay(g.ts))}` : ''}</span>${g.note ? `<span class="gc-note">${esc(g.note)}</span>` : ''}</div>
     ${row(g.away)}${row(g.home)}
   </button>`;
 }
