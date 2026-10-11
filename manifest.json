@@ -1,0 +1,31 @@
+{
+  "name": "Biblioteca de Alejandría",
+  "short_name": "Alejandría",
+  "description": "Control de manhwas, mangas, animes, series, películas y equipos de fútbol.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0a14",
+  "theme_color": "#0b0a14",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["books", "entertainment", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": { "title": "share_title", "text": "share_text", "url": "share_url" }
+  },
+  "shortcuts": [
+    { "name": "Agregar obra", "short_name": "Agregar", "url": "./#/nuevo", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Pegar link de capítulo", "short_name": "Pegar link", "url": "./#/pegar", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Mis equipos", "short_name": "Fútbol", "url": "./#/futbol", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
