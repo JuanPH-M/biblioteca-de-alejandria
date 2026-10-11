@@ -1,6 +1,6 @@
 // Estado de la app y acciones sobre las obras.
 import { db, getSetting, setSetting, uid } from './db.js';
-import { parseLink, normKey, nextChapterUrl, chapterUrl, findWorkForLink } from './links.js';
+import { parseLink, normKey, nextChapterUrl, chapterUrl, findWorkForLink, seriesUrl } from './links.js';
 
 export const TYPES = {
   manhwa: { label: 'Manhwa', unit: 'Cap.', unitLong: 'capítulo', reading: true, emoji: '📗' },
@@ -219,12 +219,23 @@ export function continueTarget(w) {
       const first = chapterUrl(l.url, 1, S.patterns);
       return { url: first || l.url, next: first ? 1 : null, link: l, last: null };
     }
+    // sitios donde el link no dice el capítulo (p. ej. Olympus): lista de capítulos + último link guardado
+    const list = seriesUrl(l.url);
+    return { url: l.url, next: null, link: l, list, last: { url: l.url, n: n || null, saved: true } };
   }
   return { url: l.url, next: null, link: l, last: null };
 }
 
+// Abre un link en el navegador. Se usa un enlace real porque Safari (iPhone)
+// bloquea window.open si no ocurre en el mismo toque del usuario.
 export function openUrl(url) {
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 // Aplica un link analizado a una obra existente (actualiza progreso en vez de duplicar)

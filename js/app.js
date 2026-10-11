@@ -8,7 +8,7 @@ import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImp
 import { renderFootball } from './football.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.6.1';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -155,7 +155,7 @@ async function renderHome(root) {
           <a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}${pct != null ? `<span class="c-bar"><i style="width:${pct}%"></i></span>` : ''}</a>
           <div class="c-title">${esc(w.title)}</div>
           <div class="c-row"><span class="muted small">${esc(progressLabel(w))}</span>
-          ${t ? `<button class="c-go" data-continue="${w.id}" aria-label="Continuar">${ICONS.play}</button>` : ''}</div>
+          ${t ? `<button class="c-go" data-continue="${w.id}" ${!t.next && t.list ? 'data-mode="list"' : ''} aria-label="Continuar">${ICONS.play}</button>` : ''}</div>
         </div>`; }).join('')}
     </div>
   </section>` : ''}
@@ -249,7 +249,12 @@ function spotlightHTML(w) {
         <div><b>${esc(progressLabel(w, false))}</b><small>${relTime(w.lastOpened || w.updatedAt)}</small></div>
       </div>
       <div class="sp-actions">
-        ${t ? `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} ${t.next ? `${TYPES[w.type].unit} ${t.next}` : 'Abrir'}</button>${t.last && t.next ? `<button class="btn sm ghost-glass" data-continue="${w.id}" data-mode="last">↺ ${TYPES[w.type].unit} ${t.last.n}</button>` : ''}` : `<a class="btn primary sm" href="#/obra/${w.id}">${ICONS.edit} Registrar avance</a>`}
+        ${t ? (t.next
+          ? `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} ${TYPES[w.type].unit} ${t.next}</button>${t.last ? `<button class="btn sm ghost-glass" data-continue="${w.id}" data-mode="last">↺ ${TYPES[w.type].unit} ${t.last.n}</button>` : ''}`
+          : t.list
+            ? `<button class="btn primary sm" data-continue="${w.id}" data-mode="list">📚 Capítulos</button><button class="btn sm ghost-glass" data-continue="${w.id}" data-mode="last">↺ Último</button>`
+            : `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} Abrir</button>`)
+          : `<a class="btn primary sm" href="#/obra/${w.id}">${ICONS.edit} Registrar avance</a>`}
       </div>
     </div>
   </section>`;
@@ -324,8 +329,8 @@ function openQuickActions(el) {
       <button class="qa-btn ${w.favorite ? 'on' : ''}" id="qa-fav">${ICONS.heart}<span>${w.favorite ? 'Quitar favorito' : 'Favorito'}</span></button>
       <button class="qa-btn" id="qa-open">${ICONS.eye}<span>Ver detalle</span></button>
       <button class="qa-btn" id="qa-edit">${ICONS.edit}<span>Editar</span></button>
-      ${t ? `<button class="qa-btn" id="qa-go">${ICONS.play}<span>${t.next ? `Siguiente · ${TYPES[w.type].unit} ${t.next}` : 'Abrir link'}</span></button>` : ''}
-      ${t?.last && t.next ? `<button class="qa-btn" id="qa-last">↺<span>Último visto · ${TYPES[w.type].unit} ${t.last.n}</span></button>` : ''}
+      ${t ? `<button class="qa-btn" id="qa-go">${t.next ? ICONS.play : t.list ? '📚' : ICONS.play}<span>${t.next ? `Siguiente · ${TYPES[w.type].unit} ${t.next}` : t.list ? 'Ver capítulos' : 'Abrir link'}</span></button>` : ''}
+      ${t?.last && (t.next || t.list) ? `<button class="qa-btn" id="qa-last">↺<span>Último visto${t.last.n ? ` · ${TYPES[w.type].unit} ${t.last.n}` : ''}</span></button>` : ''}
     </div>`);
   $('#qa-status', s.el).addEventListener('click', async (e) => {
     const c = e.target.closest('[data-status]');
@@ -340,8 +345,8 @@ function openQuickActions(el) {
   $('#qa-fav', s.el).onclick = async () => { w.favorite = !w.favorite; await saveWork(w); vibrate(12); s.close(); render({ keepScroll: true }); toast(w.favorite ? 'Agregada a favoritos' : 'Quitada de favoritos', { icon: w.favorite ? '❤️' : '🤍' }); };
   $('#qa-open', s.el).onclick = () => go('#/obra/' + w.id);
   $('#qa-edit', s.el).onclick = () => { s.close(); whenSettled(() => openEditor(w)); };
-  $('#qa-go', s.el)?.addEventListener('click', () => { s.close(); doContinue(w); });
-  $('#qa-last', s.el)?.addEventListener('click', () => { s.close(); doContinue(w, 'last'); });
+  $('#qa-go', s.el)?.addEventListener('click', () => { doContinue(w, t.next ? 'next' : t.list ? 'list' : 'next'); s.close(); });
+  $('#qa-last', s.el)?.addEventListener('click', () => { doContinue(w, 'last'); s.close(); });
 }
 onLongPress(document, '.card, .c-item, .spotlight', openQuickActions);
 
@@ -386,14 +391,20 @@ async function onContinueClick(e) {
 export async function doContinue(w, mode = 'next') {
   const t = continueTarget(w);
   if (!t) { toast('Esta obra no tiene links guardados.'); return; }
-  w.lastOpened = Date.now();
-  await saveWork(w, { touch: false });
-  if (mode === 'last' && t.last) {
+  const u = TYPES[w.type].unitLong;
+  // primero se abre el link (iPhone lo exige en el mismo toque) y después se guarda
+  if (mode === 'list' && t.list) {
+    openUrl(t.list);
+    toast('Abriendo la lista de capítulos', { icon: '📚' });
+  } else if (mode === 'last' && t.last) {
     openUrl(t.last.url);
-    toast(`Abriendo ${TYPES[w.type].unitLong} ${t.last.n} (último visto)`, { icon: '↺' });
-    return;
+    toast(t.last.saved ? 'Abriendo el último link que guardaste' : `Abriendo ${u} ${t.last.n} (último visto)`, { icon: '↺' });
+  } else {
+    openUrl(t.list && !t.next ? t.list : t.url);
   }
-  openUrl(t.url);
+  w.lastOpened = Date.now();
+  saveWork(w, { touch: false });
+  if (mode !== 'next') return;
   if (t.next != null && t.next > currentNumber(w)) {
     toast(`Abriendo ${TYPES[w.type].unitLong} ${t.next}`, {
       icon: '📖', action: `Marcar ${TYPES[w.type].unit} ${t.next}`, onAction: async () => {
@@ -692,8 +703,15 @@ async function renderDetail(root, id) {
 
 function goRowHTML(w, t) {
   const u = TYPES[w.type].unit;
-  return `<button class="btn primary lg go-next" data-go="next">${ICONS.play}<span><small>${t.next ? 'Siguiente' : 'Continuar'}</small>${t.next ? `${u} ${t.next}` : 'Abrir link'}</span></button>
-    ${t.last && t.next ? `<button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${u} ${t.last.n}</span></button>` : ''}`;
+  if (t.next) {
+    return `<button class="btn primary lg go-next" data-go="next">${ICONS.play}<span><small>Siguiente</small>${u} ${t.next}</span></button>
+      ${t.last ? `<button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${u} ${t.last.n}</span></button>` : ''}`;
+  }
+  if (t.list) {
+    return `<button class="btn primary lg go-next" data-go="list"><b>📚</b><span><small>Para el siguiente</small>Ver capítulos</span></button>
+      <button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${t.last?.n ? `${u} ${t.last.n}` : 'Abrir link'}</span></button>`;
+  }
+  return `<button class="btn primary lg go-next" data-go="next">${ICONS.play}<span><small>Continuar</small>Abrir link</span></button>`;
 }
 function refreshContinue(w, root) {
   const row = $('#go-row', root);

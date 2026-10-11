@@ -56,7 +56,7 @@ También puedes **pegar el link de un capítulo nuevo** (botón *Pegar link* arr
 | `mhscans.com/series/{nombre}/capitulo-{N}/` | capítulo N, siguiente = N+1 |
 | `leercapitulo.co/leer/{código}/{nombre}/{N}/` | capítulo N, siguiente = N+1 |
 | `manhwaweb.com/leer/{nombre}-_{id}-{N}_{sufijo}` | probable capítulo N (tú lo confirmas una vez) |
-| `olympusxyz.com/capitulo/{id}/{nombre}` | nombre y link; el número es interno, capítulo manual |
+| `olympusxyz.com/capitulo/{id}/{nombre}` | nombre y link; el número es interno, capítulo manual. Botones **Ver capítulos** (lista de la serie) y **Último visto** |
 | Sitios nuevos | te muestra los números del link para que toques el del capítulo y recuerda el patrón |
 
 En Android, con la app instalada, también puedes usar **Compartir → Alejandría** desde Chrome.
