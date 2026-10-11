@@ -83,6 +83,12 @@ export async function searchTVmaze(query) {
   }));
 }
 
+// Temporadas de una serie de TVmaze: [{ n, eps }] (solo las que tienen episodios anunciados)
+export async function tvmazeSeasons(showId) {
+  const data = await fetchJSON(`https://api.tvmaze.com/shows/${showId}/seasons`);
+  return data.filter((s) => s.episodeOrder > 0).map((s) => ({ n: s.number, eps: s.episodeOrder }));
+}
+
 // ---------- Wikipedia (gratis, sin clave) ----------
 // Nombre y sinopsis desde Wikipedia en español; el póster desde Wikipedia en inglés,
 // que es donde suelen estar los pósters de películas y series.

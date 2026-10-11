@@ -1,6 +1,6 @@
 // Secciones: plataformas, fútbol, estadísticas, ajustes (respaldo) e importación de marcadores.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, readFile, download, relTime, hueOf, initials, coverHTML, vibrate } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed } from './store.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
 import { searchTeams, teamFixtures, ATTRIBUTION, searchInfo } from './api.js';
 import { db } from './db.js';
@@ -19,7 +19,7 @@ const pageHeader = (title, sub = '') => `
 
 // ======================= PLATAFORMAS =======================
 export function renderPlatforms(root) {
-  const count = (k) => S.works.filter((w) => (w.links || []).some((l) => l.platform === k)).length;
+  const count = (k) => S.works.filter((w) => platformsOf(w).includes(k)).length;
   root.innerHTML = `${pageHeader('Plataformas', 'Dónde ves y lees cada cosa')}
   <div class="plat-grid">
     ${[...STREAMING, 'web'].map((k, i) => {
@@ -35,7 +35,7 @@ export function renderPlatforms(root) {
 
 export function renderPlatform(root, key) {
   const p = PLATFORMS[key] || PLATFORMS.web;
-  const list = S.works.filter((w) => (w.links || []).some((l) => l.platform === key)).sort((a, b) => b.updatedAt - a.updatedAt);
+  const list = S.works.filter((w) => platformsOf(w).includes(key)).sort((a, b) => b.updatedAt - a.updatedAt);
   const groups = Object.keys(STATUSES).map((st) => [st, list.filter((w) => w.status === st)]).filter(([, l]) => l.length);
   root.innerHTML = `${backHeader(esc(p.name), `${list.length} ${list.length === 1 ? 'obra' : 'obras'}`, '#/plataformas')}
   <div class="plat-hero" style="--c:${p.color}"><span>${key === 'web' ? ICONS.book : ICONS.play}</span><b>${esc(p.name)}</b></div>
@@ -491,12 +491,14 @@ export function renderImport(root) {
       const link = linkFromParsed({ url: it.url, platform: it.platform, host: it.host, slug: it.slug, rule: it.rule });
       const ex = byKey.get(normKey(it.title));
       if (ex) {
-        if (!(ex.links || []).some((l) => l.url === it.url)) ex.links = [link, ...(ex.links || []).filter((l) => !(l.host === it.host && l.slug && l.slug === it.slug))];
+        if (TRACK_ONLY.includes(ex.type)) { if (it.platform !== 'web') ex.platform = it.platform; }
+        else if (!(ex.links || []).some((l) => l.url === it.url)) ex.links = [link, ...(ex.links || []).filter((l) => !(l.host === it.host && l.slug && l.slug === it.slug))];
         if (it.chapter != null && it.chapter > (ex.progress.chapter || 0) && ex.type !== 'serie') ex.progress.chapter = it.chapter;
         await saveWork(ex);
         updated++;
       } else {
-        const w = newWork({ title: it.title, type: it.type, status: it.status, links: [link] });
+        const track = TRACK_ONLY.includes(it.type);
+        const w = newWork({ title: it.title, type: it.type, status: it.status, links: track ? [] : [link], platform: track && it.platform !== 'web' ? it.platform : '' });
         if (it.chapter != null) { if (it.type === 'serie') w.progress.episode = it.chapter; else w.progress.chapter = it.chapter; }
         await saveWork(w);
         byKey.set(normKey(w.title), w);

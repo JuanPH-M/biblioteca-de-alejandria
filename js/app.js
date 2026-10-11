@@ -1,14 +1,14 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber } from './store.js';
-import { PLATFORMS } from './links.js';
-import { ATTRIBUTION } from './api.js';
+import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, setPref, currentNumber, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals } from './store.js';
+import { PLATFORMS, STREAMING } from './links.js';
+import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet } from './editor.js';
 import { renderPlatforms, renderPlatform, renderFootball, renderStats, renderSettings, renderImport, streakDays } from './sections.js';
 import { uid } from './db.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -57,7 +57,7 @@ window.addEventListener('hashchange', () => render());
 // ---------- tarjetas ----------
 export function cardHTML(w, i = 0) {
   const st = STATUSES[w.status];
-  const plats = [...new Set((w.links || []).map((l) => l.platform))];
+  const plats = platformsOf(w);
   const canPlus = w.type !== 'pelicula';
   const pct = w.total ? Math.min(100, (currentNumber(w) / w.total) * 100) : 0;
   return `<article class="card" data-id="${w.id}" style="--i:${Math.min(i, 20)}">
@@ -90,6 +90,7 @@ export async function quickPlus(btn) {
   const prog = card?.querySelector('[data-prog]');
   rollNumber(prog, progressLabel(w), 1);
   floatText(btn, '+1');
+  if (w.seasonJump) { toast(`${w.title}: empieza la temporada ${w.seasonJump}`, { icon: '📺' }); delete w.seasonJump; }
   if (w.justFinished) { delete w.justFinished; finishPrompt(w); }
 }
 
@@ -139,7 +140,7 @@ async function renderHome(root) {
     <div class="carousel" id="carousel">
       ${cont.map((w) => { const t = continueTarget(w); return `
         <div class="c-item" data-id="${w.id}">
-          <a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}<span class="c-shine"></span></a>
+          <a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}</a>
           <div class="c-title">${esc(w.title)}</div>
           <div class="c-row"><span class="muted small">${esc(progressLabel(w))}</span>
           ${t ? `<button class="c-go" data-continue="${w.id}" aria-label="Continuar">${ICONS.play}</button>` : `<button class="c-go ghost" data-plus="${w.id}" aria-label="Sumar uno">+1</button>`}</div>
@@ -190,7 +191,6 @@ async function renderHome(root) {
     renderGrid();
   };
   root.addEventListener('click', onContinueClick);
-  setupCarousel($('#carousel', root));
 }
 
 function renderGrid() {
@@ -220,27 +220,6 @@ function renderGrid() {
     return;
   }
   grid.innerHTML = list.map((w, i) => cardHTML(w, i)).join('');
-}
-
-// Carrusel 3D: las portadas giran según su distancia al centro
-function setupCarousel(el) {
-  if (!el) return;
-  if (reducedMotion()) return;
-  let raf = 0;
-  const update = () => {
-    raf = 0;
-    const cx = el.getBoundingClientRect().left + el.clientWidth / 2;
-    for (const item of el.children) {
-      const r = item.getBoundingClientRect();
-      const d = (r.left + r.width / 2 - cx) / el.clientWidth;
-      const rot = Math.max(-35, Math.min(35, d * -50));
-      const cover = item.firstElementChild;
-      cover.style.transform = `perspective(600px) rotateY(${rot}deg) scale(${1 - Math.min(0.12, Math.abs(d) * 0.18)})`;
-      cover.style.setProperty('--shine', `${50 + d * 80}%`);
-    }
-  };
-  el.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(update); }, { passive: true });
-  update();
 }
 
 async function onContinueClick(e) {
@@ -274,31 +253,78 @@ function starsHTML(rating) {
   return `<div class="stars" role="radiogroup" aria-label="Calificación">${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= rating ? 'on' : ''}" data-star="${n}" role="radio" aria-checked="${n === rating}" aria-label="${n} estrellas">${ICONS.star}</button>`).join('')}</div>`;
 }
 
+const fmtDay = (ts) => new Date(ts).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+
 function counterHTML(w) {
   const t = TYPES[w.type];
   if (w.type === 'pelicula') {
     const seen = w.status === 'terminado';
-    return `<section class="panel counter-panel"><button class="btn ${seen ? 'success' : 'primary'} block lg" id="movie-seen">${seen ? '✓ Vista' : 'Marcar como vista'}</button></section>`;
+    return `<section class="panel counter-panel movie-panel">
+      <button class="btn ${seen ? 'success' : 'primary'} block lg" id="movie-seen">${seen ? '✓ Vista' : '🎬 Marcar como vista'}</button>
+      <p class="muted small center">${seen ? (w.watchedAt ? `La viste el ${fmtDay(w.watchedAt)}` : 'Ya la viste') : 'Cuando la veas, márcala aquí para llevar tu registro.'}</p>
+    </section>`;
+  }
+  if (w.type === 'serie') {
+    const sn = w.progress.season || 1, ep = w.progress.episode || 0;
+    const eps = seasonEpisodes(w);
+    return `<section class="panel counter-panel series-panel">
+      <div class="ep-now">
+        <small>Vas en</small>
+        <div class="ep-big"><span class="ep-tag">T</span><b id="season-num">${sn}</b><span class="ep-sep">·</span><span class="ep-tag">E</span><button class="num" id="num" aria-label="Editar episodio">${ep}</button></div>
+        <small id="ep-of">${eps ? `de ${eps} episodios en la temporada ${sn}` : 'toca el número del episodio para editarlo'}</small>
+      </div>
+      <div class="counter series">
+        <button class="cbtn minus" data-step="-1" aria-label="Restar un episodio">−1</button>
+        <button class="cbtn plus" data-step="1" aria-label="Sumar un episodio"><span>+1 episodio</span></button>
+      </div>
+      <div class="pbar ${eps ? '' : 'hidden'}"><i style="width:${eps ? Math.min(100, (ep / eps) * 100) : 0}%"></i></div>
+      <div class="season-row">
+        <span class="muted">Temporada</span>
+        <div class="stepper"><button class="icon-btn sm" data-season="-1" aria-label="Temporada anterior">−</button><b id="season-num2">${sn}</b><button class="icon-btn sm" data-season="1" aria-label="Temporada siguiente">+</button></div>
+        <button class="btn sm ghost" id="new-season">Siguiente temporada</button>
+      </div>
+      <div class="muted small center" id="series-total">${seriesTotalText(w)}</div>
+    </section>`;
   }
   const n = currentNumber(w);
   const pct = w.total ? Math.min(100, (n / w.total) * 100) : null;
   return `<section class="panel counter-panel">
-    ${w.type === 'serie' ? `<div class="season-row">
-      <span class="muted">Temporada</span>
-      <div class="stepper"><button class="icon-btn sm" data-season="-1" aria-label="Temporada anterior">−</button><b id="season-num">${w.progress.season || 1}</b><button class="icon-btn sm" data-season="1" aria-label="Temporada siguiente">+</button></div>
-      <button class="btn sm ghost" id="new-season">Nueva temporada</button>
-    </div>` : ''}
     <div class="counter">
       <button class="cbtn minus" data-step="-1" aria-label="Restar uno">−1</button>
       <div class="cval">
-        <small>${t.unitLong[0].toUpperCase() + t.unitLong.slice(1)}${w.type === 'serie' ? '' : ''}</small>
+        <small>${t.unitLong[0].toUpperCase() + t.unitLong.slice(1)}</small>
         <button class="num" id="num" aria-label="Editar número">${n}</button>
         <small>${w.total ? `de ${w.total}` : 'toca el número para editar'}</small>
       </div>
       <button class="cbtn plus" data-step="1" aria-label="Sumar uno"><span>+1</span></button>
     </div>
     ${pct != null ? `<div class="pbar"><i style="width:${pct}%"></i></div><div class="muted small center">${Math.round(pct)}% completado</div>` : ''}
-    ${w.type === 'serie' && w.progress.watched ? `<div class="muted small center">${w.progress.watched} episodios vistos en total</div>` : ''}
+  </section>`;
+}
+
+function seriesTotalText(w) {
+  const tot = seriesTotals(w);
+  if (tot) return `${tot.seen} de ${tot.total} episodios vistos · ${w.seasons.length} ${w.seasons.length === 1 ? 'temporada' : 'temporadas'}`;
+  return w.progress.watched ? `${w.progress.watched} episodios vistos en total` : '';
+}
+
+// Actualiza el panel de la serie sin recargar la pantalla
+function refreshSeries(w, root, dir) {
+  const sn = w.progress.season || 1, eps = seasonEpisodes(w);
+  rollNumber($('#num', root), w.progress.episode || 0, dir);
+  if ($('#season-num', root).textContent !== String(sn)) { rollNumber($('#season-num', root), sn, dir); }
+  $('#season-num2', root).textContent = sn;
+  $('#ep-of', root).textContent = eps ? `de ${eps} episodios en la temporada ${sn}` : 'toca el número del episodio para editarlo';
+  const bar = $('.series-panel .pbar', root);
+  bar.classList.toggle('hidden', !eps);
+  bar.firstElementChild.style.width = (eps ? Math.min(100, ((w.progress.episode || 0) / eps) * 100) : 0) + '%';
+  $('#series-total', root).textContent = seriesTotalText(w);
+}
+
+function platformPanelHTML(w) {
+  return `<section class="panel">
+    <div class="sec-head"><h3>Dónde la veo</h3><span class="muted small">${w.platform ? 'toca otra vez para quitar' : 'elige la plataforma'}</span></div>
+    <div class="chips wrap" id="plat-chips">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${k}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div>
   </section>`;
 }
 
@@ -338,7 +364,7 @@ async function renderDetail(root, id) {
       <div class="hero-main">
         <div class="hero-cover" id="hero-cover">${coverHTML(w)}<span class="glare"></span></div>
         <div class="hero-info">
-          <div class="chips tight"><span class="badge type-${w.type}">${t.emoji} ${t.label}</span>${w.pubStatus ? `<span class="badge soft">${esc(w.pubStatus)}</span>` : ''}</div>
+          <div class="chips tight"><span class="badge type-${w.type}">${t.emoji} ${t.label}</span>${w.year ? `<span class="badge soft">${esc(w.year)}</span>` : ''}${w.pubStatus ? `<span class="badge soft">${esc(w.pubStatus)}</span>` : ''}${w.platform ? `<span class="pbadge" style="--c:${PLATFORMS[w.platform]?.color}">${esc(PLATFORMS[w.platform]?.name)}</span>` : ''}</div>
           <h1>${esc(w.title)}</h1>
           ${starsHTML(w.rating || 0)}
           ${(w.genres || []).length ? `<div class="genres">${w.genres.slice(0, 5).map((g) => `<span>${esc(g)}</span>`).join('')}</div>` : ''}
@@ -357,7 +383,7 @@ async function renderDetail(root, id) {
       </div>
     </section>
 
-    ${linksHTML(w)}
+    ${isTrackOnly(w) ? platformPanelHTML(w) : linksHTML(w)}
 
     ${w.synopsis ? `<section class="panel"><h3>Sinopsis</h3><p class="synopsis clamp" id="synopsis">${esc(w.synopsis)}</p><button class="link-btn" id="more">Ver más</button></section>` : ''}
 
@@ -409,7 +435,10 @@ async function renderDetail(root, id) {
     const d = +b.dataset.step;
     vibrate(d > 0 ? 14 : 8);
     await changeProgress(w, d);
-    rollNumber($('#num', root), currentNumber(w), d);
+    if (w.type === 'serie') {
+      refreshSeries(w, root, d);
+      if (w.seasonJump) { toast(`¡Empieza la temporada ${w.seasonJump}!`, { icon: '📺' }); delete w.seasonJump; }
+    } else rollNumber($('#num', root), currentNumber(w), d);
     if (d > 0) floatText(b, '+1');
     refreshContinue(w, root);
     updatePbar(w, root);
@@ -418,19 +447,19 @@ async function renderDetail(root, id) {
   $('#num', root)?.addEventListener('click', (e) => editNumber(w, e.currentTarget, root));
   root.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', async () => {
     await setProgress(w, { season: (w.progress.season || 1) + +b.dataset.season });
-    rollNumber($('#season-num', root), w.progress.season, +b.dataset.season);
+    refreshSeries(w, root, +b.dataset.season);
   }));
   $('#new-season', root)?.addEventListener('click', async () => {
     await setProgress(w, { season: (w.progress.season || 1) + 1 });
     w.progress.episode = 0; await saveWork(w);
-    rollNumber($('#season-num', root), w.progress.season, 1);
-    rollNumber($('#num', root), 0, -1);
-    toast(`Temporada ${w.progress.season} · episodio 0`);
+    refreshSeries(w, root, 1);
+    toast(`Temporada ${w.progress.season}: listo para el episodio 1`, { icon: '📺' });
   });
   $('#movie-seen', root)?.addEventListener('click', async (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     const seen = w.status !== 'terminado';
     w.status = seen ? 'terminado' : 'pendiente';
+    w.watchedAt = seen ? Date.now() : null;
     await saveWork(w);
     if (seen) { confetti(r.left + r.width / 2, r.top); import('./store.js').then((m) => m.logActivity(1)); }
     render({ keepScroll: true });
@@ -446,8 +475,27 @@ async function renderDetail(root, id) {
     if (w.status === 'terminado') { const r = c.getBoundingClientRect(); confetti(r.left + r.width / 2, r.top); vibrate(30); }
   });
 
+  // plataforma (series y películas)
+  $('#plat-chips', root)?.addEventListener('click', async (e) => {
+    const c = e.target.closest('[data-plat]');
+    if (!c) return;
+    w.platform = w.platform === c.dataset.plat ? '' : c.dataset.plat;
+    await saveWork(w);
+    vibrate(8);
+    render({ keepScroll: true });
+  });
+  if (w.type === 'serie' && w.source?.api === 'tvmaze' && navigator.onLine && (!w.seasons || Date.now() - (w.seasonsAt || 0) > 3 * 864e5)) {
+    tvmazeSeasons(w.source.id).then(async (seasons) => {
+      if (!seasons.length) return;
+      const changed = JSON.stringify(seasons) !== JSON.stringify(w.seasons);
+      w.seasons = seasons; w.seasonsAt = Date.now();
+      await saveWork(w, { touch: false });
+      if (changed && location.hash.endsWith(w.id)) render({ keepScroll: true });
+    }).catch(() => {});
+  }
+
   // links
-  $('#add-link', root).onclick = () => openPasteSheet({ work: w });
+  $('#add-link', root)?.addEventListener('click', () => openPasteSheet({ work: w }));
   root.querySelector('.links')?.addEventListener('click', async (e) => {
     const del = e.target.closest('[data-dellink]');
     const pri = e.target.closest('[data-primary]');
