@@ -164,7 +164,7 @@ export function confetti(x = innerWidth / 2, y = innerHeight / 2, n = 28) {
 
 // Onda al tocar botones y chips
 document.addEventListener('pointerdown', (e) => {
-  const el = e.target.closest('.btn, .chip, .icon-btn, .cbtn, .fab, .plat-tile, .paste-btn, .qa-btn, .next-pick, .seg button');
+  const el = e.target.closest('.btn, .chip, .icon-btn, .cbtn, .fab, .plat-tile, .paste-btn, .qa-btn, .next-pick, .seg button, .tcard, .add-tile, .lg-chip');
   if (!el || reducedMotion()) return;
   const r = el.getBoundingClientRect();
   const d = Math.max(r.width, r.height) * 2.2;

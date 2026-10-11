@@ -8,7 +8,7 @@ import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImp
 import { renderFootball } from './football.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.5.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -160,8 +160,10 @@ async function renderHome(root) {
     </div>
   </section>` : ''}
   <div class="${total ? '' : 'hidden'}">
-  <div class="chips scroll-x" id="type-chips" role="tablist">
-    ${[['all', '✨ Todo'], ...Object.entries(TYPES).map(([k, t]) => [k, `${t.emoji} ${t.label}`])].map(([k, l]) => `<button class="chip tchip type-${k} ${f.type === k ? 'on' : ''}" data-type="${k}">${l}<em>${k === 'all' ? total : S.works.filter((w) => w.type === k).length}</em></button>`).join('')}
+  <div class="sec-head types-head"><h2>Explorar</h2></div>
+  <div class="type-cards" id="type-chips" role="tablist">
+    ${[['all', '✨', 'Todo'], ...Object.entries(TYPES).map(([k, t]) => [k, t.emoji, t.label])].map(([k, emo, l], i) => `<button class="tcard type-${k} ${f.type === k ? 'on' : ''}" data-type="${k}" role="tab" aria-selected="${f.type === k}" style="--i:${i}">
+      <span class="tc-emoji">${emo}</span><span class="tc-label">${l}</span><span class="tc-count">${((n) => `${n} ${n === 1 ? 'obra' : 'obras'}`)(k === 'all' ? total : S.works.filter((w) => w.type === k).length)}</span></button>`).join('')}
   </div>
   <div class="filter-row">
     <label class="select"><select id="f-status" aria-label="Estado">
@@ -189,7 +191,9 @@ async function renderHome(root) {
     const c = e.target.closest('[data-type]');
     if (!c) return;
     f.type = c.dataset.type;
-    $$('#type-chips .chip').forEach((x) => x.classList.toggle('on', x === c));
+    $$('#type-chips .tcard').forEach((x) => { x.classList.toggle('on', x === c); x.setAttribute('aria-selected', x === c); });
+    vibrate(8);
+    c.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', inline: 'center', block: 'nearest' });
     renderGrid();
   });
   $('#f-status', root).onchange = (e) => { f.status = e.target.value; renderGrid(); };

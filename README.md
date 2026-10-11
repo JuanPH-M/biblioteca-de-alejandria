@@ -31,7 +31,7 @@ App web progresiva (PWA) en español para llevar el control de lo que lees y ves
 
 ### 1. Agregar algo
 1. Toca el botón **＋** (centro de la barra de abajo).
-2. Elige qué es: **Manhwa, Manga, Anime, Serie, Película** o **Pegar link**.
+2. Elige qué es en las tarjetas grandes: **Manhwa, Manga, Anime, Serie, Película** o **Pegar link**.
 3. Escribe el nombre: aparecen sugerencias con portada, sinopsis y géneros. Toca la correcta.
 4. Elige el estado (Pendiente, Leyendo/Viendo, En emisión, Pausado, Terminado, Abandonado) y por dónde vas.
 5. En **manhwas, mangas y animes** pega el link de donde lo lees o ves. En **series y películas** solo eliges la plataforma (Netflix, Prime Video, Disney+, HBO Max, YouTube o Crunchyroll).
@@ -66,7 +66,7 @@ En Android, con la app instalada, también puedes usar **Compartir → Alejandr�
 - **Tarjeta destacada** con lo último que estás siguiendo y su anillo de progreso.
 - **🎲 ¿Qué sigue?**: una ruleta que elige al azar qué leer o ver.
 - **Continuar**: carrusel con lo que tienes en curso.
-- **Filtros** por tipo, estado, plataforma y favoritos, buscador y orden.
+- **Explorar**: tarjetas grandes por tipo (Todo, Manhwa, Manga, Anime, Serie, Película) y filtros por estado, plataforma y favoritos, buscador y orden.
 - **Mantén presionada una tarjeta** para acciones rápidas: cambiar estado, favorito, editar, siguiente o último capítulo.
 
 ### 5. Plataformas
@@ -75,7 +75,7 @@ En la pestaña **Plataformas** ves todo lo que tienes en Netflix, Prime Video, D
 ### 6. Fútbol
 - **🛡️ Equipos**: busca tu club o selección y toca **Seguir**. Verás próximos partidos y últimos resultados.
 - **🏆 Ligas**: toca la Champions, la Premier, La Liga… o busca los torneos de tu país (p. ej. *Colombia*). Cada liga muestra **Partidos**, **Tabla** y **Torneos** relacionados del mismo país.
-- **Toca cualquier partido** para ver goleadores y asistencias, cambios, tarjetas, alineaciones, estadísticas y, si existe, un botón para ver el **resumen con los goles en YouTube**.
+- **Toca cualquier partido** para ver su detalle en tres pestañas: **Resumen** (marcador, goles por equipo, momentos del partido en línea de tiempo y botón para ver el **resumen con los goles en YouTube**), **Alineaciones** y **Estadísticas**. Si un partido no trae video, el botón busca el resumen en YouTube.
 - Para quitar un equipo o una liga toca 🗑️: la app siempre pide confirmación.
 
 ### 7. Notas
