@@ -17,6 +17,28 @@ export const STATUSES = {
   terminado: { label: 'Terminado', color: '#34d399' },
   abandonado: { label: 'Abandonado', color: '#f87171' },
 };
+// En series y películas solo se lleva el registro: plataforma y progreso, sin links que abrir.
+export const TRACK_ONLY = ['serie', 'pelicula'];
+export const isTrackOnly = (w) => TRACK_ONLY.includes(w.type);
+
+// Plataformas de una obra: la elegida (series/películas) y las de sus links
+export function platformsOf(w) {
+  const set = new Set((w.links || []).map((l) => l.platform));
+  if (w.platform) set.add(w.platform);
+  return [...set];
+}
+
+// Temporadas conocidas (de TVmaze): [{ n, eps }]
+export const seasonEpisodes = (w, n = w.progress.season || 1) => (w.seasons || []).find((s) => s.n === n)?.eps || null;
+export function seriesTotals(w) {
+  const seasons = w.seasons || [];
+  if (!seasons.length) return null;
+  const cur = w.progress.season || 1;
+  const total = seasons.reduce((a, s) => a + s.eps, 0);
+  const seen = seasons.filter((s) => s.n < cur).reduce((a, s) => a + s.eps, 0) + Math.min(w.progress.episode || 0, seasonEpisodes(w) || Infinity);
+  return { total, seen: Math.min(seen, total), lastSeason: seasons[seasons.length - 1].n };
+}
+
 export const statusLabel = (status, type) => (status === 'viendo' ? (TYPES[type]?.reading ? 'Leyendo' : 'Viendo') : STATUSES[status]?.label || status);
 
 export const S = {
@@ -32,6 +54,12 @@ const SETTING_KEYS = Object.keys(S.settings);
 export async function loadAll() {
   const [works, patterns, teams] = await Promise.all([db.all('works'), db.all('patterns'), db.all('teams')]);
   S.works = works;
+  const migrate = works.filter((w) => TRACK_ONLY.includes(w.type) && (w.links || []).length);
+  for (const w of migrate) {
+    w.platform = w.platform || (w.links.find((l) => l.platform !== 'web') || {}).platform || '';
+    w.links = [];
+  }
+  if (migrate.length) await db.putMany('works', migrate);
   S.patterns = Object.fromEntries(patterns.map((p) => [p.host, p]));
   S.teams = teams.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   for (const k of SETTING_KEYS) S.settings[k] = await getSetting(k, S.settings[k]);
@@ -61,6 +89,10 @@ export function newWork(data = {}) {
     source: null,
     aliases: [],
     links: [],
+    platform: '',
+    seasons: null,
+    year: null,
+    watchedAt: null,
     notes: '',
     spoilers: [],
     createdAt: now,
@@ -119,11 +151,24 @@ export async function changeProgress(w, delta) {
   if (w.type === 'serie') {
     p.episode = Math.max(0, (p.episode || 0) + delta);
     if (p.episode !== w.progress.episode) p.watched = Math.max(0, (p.watched || 0) + delta);
+    // con temporadas conocidas: al pasar el último episodio salta a la siguiente temporada
+    const eps = seasonEpisodes(w, p.season || 1);
+    if (delta > 0 && eps && p.episode > eps) {
+      const next = (w.seasons || []).find((s) => s.n > (p.season || 1));
+      if (next) { p.season = next.n; p.episode = 1; w.seasonJump = next.n; }
+      else { p.episode = eps; p.watched = Math.max(0, p.watched - 1); }
+    }
+    if (delta < 0 && p.episode === 0 && (p.season || 1) > 1 && w.progress.episode === 0) {
+      const prev = [...(w.seasons || [])].reverse().find((s) => s.n < (p.season || 1));
+      if (prev) { p.season = prev.n; p.episode = prev.eps; }
+    }
+    const tot = seriesTotals({ ...w, progress: p });
+    if (delta > 0 && tot && tot.seen >= tot.total && w.status !== 'terminado' && /Final/i.test(w.pubStatus || '')) w.justFinished = true;
   } else {
     p.chapter = Math.max(0, Math.round(((p.chapter || 0) + delta) * 100) / 100);
     if (Math.floor(p.chapter) !== p.chapter && delta > 0) p.chapter = Math.floor(p.chapter);
   }
-  const changed = p.episode !== w.progress.episode || p.chapter !== w.progress.chapter;
+  const changed = p.episode !== w.progress.episode || p.chapter !== w.progress.chapter || p.season !== w.progress.season;
   w.progress = p;
   if (delta > 0 && changed) {
     if (w.status === 'pendiente') w.status = 'viendo';
@@ -161,6 +206,7 @@ export function linkFromParsed(p) {
 
 // Link para el botón "Continuar": siguiente capítulo si se puede armar, si no el link guardado
 export function continueTarget(w) {
+  if (isTrackOnly(w)) return null;
   const l = primaryLink(w);
   if (!l) return null;
   if (l.platform === 'web' && TYPES[w.type]?.reading !== undefined && w.type !== 'pelicula') {
@@ -181,6 +227,12 @@ export function openUrl(url) {
 
 // Aplica un link analizado a una obra existente (actualiza progreso en vez de duplicar)
 export async function applyLinkToWork(w, parsed) {
+  if (isTrackOnly(w)) {
+    // series y películas no guardan links: solo se toma la plataforma
+    if (parsed.platform !== 'web') w.platform = parsed.platform;
+    await saveWork(w);
+    return null;
+  }
   const links = [...(w.links || [])];
   const sameIdx = links.findIndex((l) => l.host === parsed.host && (!parsed.slug || !l.slug || l.slug === parsed.slug));
   const nl = linkFromParsed(parsed);
@@ -221,7 +273,7 @@ export function filteredWorks(base = S.works) {
     if (f.type !== 'all' && w.type !== f.type) return false;
     if (f.status !== 'all' && w.status !== f.status) return false;
     if (f.fav && !w.favorite) return false;
-    if (f.platform !== 'all' && !(w.links || []).some((l) => l.platform === f.platform)) return false;
+    if (f.platform !== 'all' && !platformsOf(w).includes(f.platform)) return false;
     if (q && !normKey(w.title).includes(q) && !(w.aliases || []).some((a) => normKey(a).includes(q))) return false;
     return true;
   });

@@ -164,7 +164,8 @@ export function confetti(x = innerWidth / 2, y = innerHeight / 2, n = 28) {
 
 // Inclinación 3D al tocar/mover el puntero
 export function tilt(el, max = 12) {
-  if (!el || reducedMotion()) return;
+  // solo con mouse: en el celular el toque deformaba la portada
+  if (!el || reducedMotion() || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
   const move = (e) => {
     const r = el.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;

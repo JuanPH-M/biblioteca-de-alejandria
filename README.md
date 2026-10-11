@@ -11,14 +11,15 @@ App web progresiva (PWA) en español para llevar el control de lo que lees y ves
 ## ✨ Qué hace
 
 - **Catálogo** por tipo (Manhwa, Manga, Anime, Serie, Película) y estado (Pendiente, Viendo/Leyendo, En emisión, Pausado, Terminado, Abandonado), con filtros por tipo, estado, plataforma y favoritos, buscador, orden y vista en cuadrícula o lista.
-- **Contador** grande de un toque (+1 / −1 / edición manual). En series: temporada y episodio. Botón +1 también en cada tarjeta.
+- **Contador** grande de un toque (+1 / −1 / edición manual). Botón +1 también en cada tarjeta.
+- **Series y películas: solo registro.** Eliges la plataforma (Netflix, Prime Video, Disney+, HBO Max, YouTube o Crunchyroll) y llevas por dónde vas, sin links que abrir. En series con datos de TVmaze la app conoce cuántos episodios tiene cada temporada y pasa sola a la siguiente; en películas guarda la fecha en que la viste.
 - **Calificación** de 1 a 5 estrellas y **favoritos**.
 - **Portadas e información automática** al escribir el nombre:
   - Manhwa, manga y anime: [AniList](https://anilist.co) (gratis, sin clave).
   - Series: [TVmaze](https://www.tvmaze.com) y [Wikipedia](https://es.wikipedia.org) (gratis, sin clave).
   - Películas: [Wikipedia](https://es.wikipedia.org) (gratis, sin clave): nombre, sinopsis y póster.
   - Portada propia por link o desde la galería del teléfono.
-- **Dónde lo lees o ves**: links por obra (Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll o "Página web"), una sección por plataforma y botón **Continuar**.
+- **Dónde lo lees**: links de lectura por obra (manhwa, manga y anime), una sección por plataforma y botón **Continuar** que abre el siguiente capítulo.
 - **Reconocimiento de links de lectura**: detecta la obra y el capítulo, y arma el link del siguiente capítulo:
   | Sitio | Qué reconoce |
   |---|---|

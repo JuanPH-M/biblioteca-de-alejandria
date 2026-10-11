@@ -1,8 +1,8 @@
 // Editor de obras (agregar/editar) y hoja "Pegar link".
 import { $, $$, esc, openSheet, whenSettled, toast, debounce, imageToDataURL, ICONS, coverHTML, confetti, vibrate } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
-import { PLATFORMS, parseLink, nextChapterUrl, KNOWN_SITES } from './links.js';
-import { searchInfo, ATTRIBUTION } from './api.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, statusLabel, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
+import { PLATFORMS, STREAMING, parseLink, nextChapterUrl, KNOWN_SITES } from './links.js';
+import { searchInfo, ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { render, go } from './app.js';
 
 // ---------- análisis visual de un link ----------
@@ -155,7 +155,10 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
   if (fromLink) {
     w.title = w.title || fromLink.title || '';
     pendingLink = fromLink;
-    if (fromLink.platform !== 'web') w.type = fromLink.platform === 'crunchyroll' ? 'anime' : 'serie';
+    if (fromLink.platform !== 'web') {
+      w.type = fromLink.platform === 'crunchyroll' ? 'anime' : 'serie';
+      if (w.type === 'serie') { w.platform = fromLink.platform; pendingLink = null; } // las series solo guardan la plataforma
+    }
     if (fromLink.chapter != null) {
       if (w.type === 'serie') w.progress.episode = fromLink.chapter; else w.progress.chapter = fromLink.chapter;
     }
@@ -196,7 +199,11 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       </div>
     </div>
 
-    <div class="field"><span>Links (dónde lo ${TYPES[w.type].reading ? 'lees' : 'ves'})</span>
+    <div class="field" id="ed-plat-field"><span>Dónde la ves</span>
+      <div class="chips wrap" id="ed-plat">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${k}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div>
+    </div>
+
+    <div class="field" id="ed-links-field"><span>Links (dónde lo ${TYPES[w.type].reading ? 'lees' : 'ves'})</span>
       <div id="ed-links"></div>
       <div class="field-row"><input id="ed-newlink" type="url" inputmode="url" placeholder="Pega un link…"><button class="btn sm" id="ed-addlink">Añadir</button></div>
       <div id="ed-linkreport"></div>
@@ -222,7 +229,22 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     $$('#ed-type button', el).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
     $$('#ed-status .chip', el).forEach((c) => { c.lastChild.textContent = statusLabel(c.dataset.status, w.type); });
     drawProgress();
+    drawKind();
     if (titleInput.value.trim().length >= 2) doSearch();
+  });
+
+  // series y películas: plataforma en vez de links
+  function drawKind() {
+    const track = TRACK_ONLY.includes(w.type);
+    $('#ed-plat-field', el).hidden = !track;
+    $('#ed-links-field', el).hidden = track;
+  }
+  drawKind();
+  $('#ed-plat', el).addEventListener('click', (e) => {
+    const c = e.target.closest('[data-plat]');
+    if (!c) return;
+    w.platform = w.platform === c.dataset.plat ? '' : c.dataset.plat;
+    $$('#ed-plat .chip', el).forEach((x) => x.classList.toggle('on', x.dataset.plat === w.platform));
   });
 
   // --- estado ---
@@ -291,6 +313,8 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     w.genres = r.genres?.length ? r.genres : w.genres;
     w.pubStatus = r.pubStatus || w.pubStatus;
     if (r.total) w.total = r.total;
+    w.year = r.year || w.year || null;
+    w.seasons = null;
     w.aliases = [...new Set([...(w.aliases || []), ...(r.altTitles || []), ...(pendingLink?.title && pendingLink.title !== r.title ? [pendingLink.title] : [])])];
     w.source = { api: r.source, id: r.sourceId, url: r.sourceUrl };
     if (r.pubStatus === 'En publicación' && w.status === 'viendo' && TYPES[w.type].reading) { /* se deja que el usuario decida */ }
@@ -398,7 +422,17 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       const dup = S.works.find((x) => x.type === w.type && x.title.toLowerCase() === w.title.toLowerCase());
       if (dup && !confirm(`Ya tienes "${dup.title}". ¿Crear otra igual?`)) return;
     }
+    if (TRACK_ONLY.includes(w.type)) {
+      if (!w.platform) w.platform = (w.links || []).find((l) => STREAMING.includes(l.platform))?.platform || '';
+      w.links = [];
+    } else if (STREAMING.includes(w.platform) && !(w.links || []).length) {
+      w.platform = '';
+    }
     const saved = await saveWork(w);
+    // temporadas de TVmaze para saber cuántos episodios tiene cada una
+    if (saved.type === 'serie' && saved.source?.api === 'tvmaze' && !saved.seasons && navigator.onLine) {
+      tvmazeSeasons(saved.source.id).then((seasons) => { if (seasons.length) { saved.seasons = seasons; saved.seasonsAt = Date.now(); saveWork(saved, { touch: false }); } }).catch(() => {});
+    }
     s.close();
     vibrate(15);
     if (isNew) {
