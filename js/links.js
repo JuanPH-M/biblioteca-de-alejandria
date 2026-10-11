@@ -227,13 +227,49 @@ export function chapterUrl(rawUrl, n, patterns = {}) {
   return url.href;
 }
 
-// Link a la lista de capítulos de la obra (sitios donde no se puede armar el siguiente capítulo)
+// Link a la lista de capítulos de la obra (sitios donde no se puede armar el siguiente capítulo).
+// Funciona con cualquier sitio: se deduce del link del capítulo quitando la parte del capítulo.
+const CH_SEG = /^(?:cap[ií]tulo|chapter|chap|cap|ch|episodio|episode|ep|c)[-_.]?\d+(?:[.-]\d+)?(?:\.html?)?$/i;
+const CH_SUFFIX = /[-_](?:cap[ií]tulo|chapter|chap|cap|ch|episodio|episode|ep)[-_.]?\d+(?:[.-]\d+)?(?:\.html?)?$/i;
+const READ_WORDS = /^(leer|read|reader|ver|view|viewer|lector|capitulo|capitulos|chapter|chapters|episode|episodio|cap|c|r)$/i;
+const isNum = (s) => /^\d+(?:\.\d+)?$/.test(s);
+const hasWord = (s) => /[a-záéíóúñ]{3}/i.test(s) && !READ_WORDS.test(s) && !isNum(s);
+
 export function seriesUrl(rawUrl) {
   const u = toURL(rawUrl);
   if (!u) return null;
-  const host = u.hostname.replace(/^www\./, '');
+  const host = u.hostname.replace(/^www\.|^m\./, '');
+  // 1) sitios conocidos con su propia regla (p. ej. Olympus)
   const rule = RULES.find((r) => r.test(host) && r.series);
-  return rule ? rule.series(u) : null;
+  if (rule) { const r = rule.series(u); if (r) return r; }
+  const segs = u.pathname.split('/').filter(Boolean).map((s) => { try { return decodeURIComponent(s); } catch { return s; } });
+  const build = (parts) => `${u.origin}/${parts.map(encodeURIComponent).join('/')}/`;
+  // 2) /manga/obra/capitulo-12  ·  /series/obra/12  →  /manga/obra/  ·  /series/obra/
+  const idx = segs.findIndex((s, i) => i > 0 && (CH_SEG.test(s) || isNum(s)));
+  if (idx > 0) {
+    const parent = segs.slice(0, idx);
+    if (parent.some(hasWord)) return build(parent);
+  }
+  // 3) /obra-capitulo-12  ·  /leer/obra-chapter-12  →  /obra/  (sin las palabras de lectura)
+  const j = segs.findIndex((s) => CH_SUFFIX.test(s));
+  if (j >= 0) {
+    const slug = segs[j].replace(CH_SUFFIX, '');
+    const before = segs.slice(0, j).filter((s) => !READ_WORDS.test(s));
+    if (hasWord(slug)) return build([...before, slug]);
+  }
+  // 4) /chapter/12345/obra  →  la última parte con nombre suele ser la obra
+  const named = segs.filter(hasWord);
+  if (idx === 0 || (segs.length && READ_WORDS.test(segs[0]))) {
+    if (named.length) return build(['series', named[named.length - 1]]);
+  }
+  return null;
+}
+
+// Búsqueda de la obra dentro del mismo sitio (último recurso)
+export function siteSearchUrl(rawUrl, title) {
+  const u = toURL(rawUrl);
+  if (!u) return null;
+  return `https://www.google.com/search?q=${encodeURIComponent(`site:${u.hostname.replace(/^www\./, '')} ${title}`)}`;
 }
 
 export const nextChapterUrl = (rawUrl, chapter, patterns) => (chapter == null ? null : chapterUrl(rawUrl, nextOf(chapter), patterns));

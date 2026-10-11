@@ -1,6 +1,6 @@
 // Estado de la app y acciones sobre las obras.
 import { db, getSetting, setSetting, uid } from './db.js';
-import { parseLink, normKey, nextChapterUrl, chapterUrl, findWorkForLink, seriesUrl } from './links.js';
+import { parseLink, normKey, nextChapterUrl, chapterUrl, findWorkForLink, seriesUrl, siteSearchUrl } from './links.js';
 
 export const TYPES = {
   manhwa: { label: 'Manhwa', unit: 'Cap.', unitLong: 'capítulo', reading: true, emoji: '📗' },
@@ -90,6 +90,7 @@ export function newWork(data = {}) {
     aliases: [],
     links: [],
     platform: '',
+    chaptersUrl: '',
     seasons: null,
     year: null,
     watchedAt: null,
@@ -220,8 +221,10 @@ export function continueTarget(w) {
       return { url: first || l.url, next: first ? 1 : null, link: l, last: null };
     }
     // sitios donde el link no dice el capítulo (p. ej. Olympus): lista de capítulos + último link guardado
-    const list = seriesUrl(l.url);
-    return { url: l.url, next: null, link: l, list, last: { url: l.url, n: n || null, saved: true } };
+    // si no se puede deducir la página de capítulos, se busca la obra dentro del mismo sitio
+    const auto = seriesUrl(l.url);
+    const list = w.chaptersUrl || auto || siteSearchUrl(l.url, w.title);
+    return { url: l.url, next: null, link: l, list, listGuessed: !w.chaptersUrl, search: siteSearchUrl(l.url, w.title), last: { url: l.url, n: n || null, saved: true } };
   }
   return { url: l.url, next: null, link: l, last: null };
 }

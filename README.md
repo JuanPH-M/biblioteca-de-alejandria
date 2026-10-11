@@ -58,6 +58,9 @@ También puedes **pegar el link de un capítulo nuevo** (botón *Pegar link* arr
 | `manhwaweb.com/leer/{nombre}-_{id}-{N}_{sufijo}` | probable capítulo N (tú lo confirmas una vez) |
 | `olympusxyz.com/capitulo/{id}/{nombre}` | nombre y link; el número es interno, capítulo manual. Botones **Ver capítulos** (lista de la serie) y **Último visto** |
 | Sitios nuevos | te muestra los números del link para que toques el del capítulo y recuerda el patrón |
+| Cualquier sitio sin capítulo siguiente | botón **📚 Ver capítulos**: la app deduce sola la página con todos los capítulos de la obra (y si no puede, la busca dentro del sitio) |
+
+Si en algún sitio **Ver capítulos** abre una página equivocada, toca *¿No es la página de capítulos? Buscar la obra en el sitio*, o en **Editar** pega el link correcto en *Página de todos los capítulos*; la app lo recordará para esa obra.
 
 En Android, con la app instalada, también puedes usar **Compartir → Alejandría** desde Chrome.
 

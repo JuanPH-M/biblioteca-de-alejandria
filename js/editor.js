@@ -233,6 +233,8 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       <div id="ed-links"></div>
       <div class="field-row"><input id="ed-newlink" type="url" inputmode="url" placeholder="Pega un link…"><button class="btn sm" id="ed-addlink">Añadir</button></div>
       <div id="ed-linkreport"></div>
+      <label class="mini chap-url"><small>Página de todos los capítulos (opcional: la app la deduce sola; ponla solo si "Ver capítulos" abre una página equivocada)</small>
+        <input id="ed-chapters" type="url" inputmode="url" placeholder="https://…/manga/nombre-de-la-obra/" value="${esc(w.chaptersUrl || '')}"></label>
     </div>
 
     <div class="field inline"><span>Calificación</span>
@@ -456,6 +458,8 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     } else if (STREAMING.includes(w.platform) && !(w.links || []).length) {
       w.platform = '';
     }
+    const chap = $('#ed-chapters', el)?.value.trim() || '';
+    w.chaptersUrl = /^https?:\/\//i.test(chap) ? chap : '';
     const saved = await saveWork(w);
     // temporadas de TVmaze para saber cuántos episodios tiene cada una
     if (saved.type === 'serie' && saved.source?.api === 'tvmaze' && !saved.seasons && navigator.onLine) {

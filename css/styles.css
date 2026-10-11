@@ -1002,3 +1002,7 @@ body.no-scroll #toasts { bottom: auto; top: calc(var(--safe-t) + 12px); }
 .mh-info > div span { font-size: 18px; }
 .mh-info b { font-weight: 600; }
 #mh-video .video-btn { margin: 0; }
+
+.go-search { display: block; margin: 6px 16px 0; text-align: center; width: calc(100% - 32px); font-weight: 600; opacity: .85; }
+.chap-url { margin-top: 10px; }
+.chap-url small { line-height: 1.35; }

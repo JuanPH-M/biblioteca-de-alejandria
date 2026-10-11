@@ -8,7 +8,7 @@ import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImp
 import { renderFootball } from './football.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.6.1';
+export const APP_VERSION = '1.6.2';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -552,7 +552,7 @@ async function renderDetail(root, id) {
       </div>
     </div>
 
-    ${target ? `<div class="go-row" id="go-row">${goRowHTML(w, target)}</div>` : ''}
+    ${target ? `<div class="go-row" id="go-row">${goRowHTML(w, target)}</div>${target.list && target.listGuessed && target.search && target.search !== target.list ? `<button class="link-btn small go-search" id="go-search">🔎 ¿No es la página de capítulos? Buscar la obra en el sitio</button>` : ''}` : ''}
 
     ${counterHTML(w)}
 
@@ -593,6 +593,7 @@ async function renderDetail(root, id) {
     await saveWork(w);
   };
   $('#go-row', root)?.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) doContinue(w, b.dataset.go); });
+  $('#go-search', root)?.addEventListener('click', () => { const t = continueTarget(w); if (t?.search) openUrl(t.search); });
   $('#more', root)?.addEventListener('click', (e) => { $('#synopsis').classList.toggle('clamp'); e.target.textContent = $('#synopsis').classList.contains('clamp') ? 'Ver más' : 'Ver menos'; });
 
   // estrellas
