@@ -1,6 +1,6 @@
 // Service worker: la app funciona sin internet (tu lista vive en IndexedDB).
 // Cambia VERSION en cada publicación para que los teléfonos reciban la actualización.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const SHELL = `shell-${VERSION}`;
 const IMAGES = 'covers-v1';
 const ASSETS = [
@@ -8,7 +8,7 @@ const ASSETS = [
   'js/app.js', 'js/db.js', 'js/ui.js', 'js/store.js', 'js/links.js', 'js/api.js', 'js/editor.js', 'js/sections.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png',
 ];
-const IMAGE_HOSTS = ['s4.anilist.co', 'static.tvmaze.com', 'image.tmdb.org'];
+const IMAGE_HOSTS = ['s4.anilist.co', 'static.tvmaze.com', 'upload.wikimedia.org', 'thumb.wikimedia.org'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(ASSETS)));

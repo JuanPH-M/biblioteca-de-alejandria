@@ -8,7 +8,7 @@ import { renderPlatforms, renderPlatform, renderFootball, renderStats, renderSet
 import { uid } from './db.js';
 
 const view = $('#view');
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {

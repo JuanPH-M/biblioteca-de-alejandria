@@ -23,7 +23,7 @@ export const S = {
   works: [],
   patterns: {},
   teams: [],
-  settings: { tmdbKey: '', lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated' },
+  settings: { lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated' },
   filters: { q: '', type: 'all', status: 'all', platform: 'all', fav: false },
 };
 
@@ -35,6 +35,7 @@ export async function loadAll() {
   S.patterns = Object.fromEntries(patterns.map((p) => [p.host, p]));
   S.teams = teams.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   for (const k of SETTING_KEYS) S.settings[k] = await getSetting(k, S.settings[k]);
+  db.del('settings', 'tmdbKey').catch(() => {}); // limpieza de la versión anterior
 }
 
 export function setPref(key, value) {
@@ -268,7 +269,6 @@ export async function restoreBackup(data, mode = 'merge') {
     await db.putMany('patterns', (data.patterns || []).filter((p) => p.host));
     await db.putMany('teams', (data.teams || []).filter((t) => t.id));
     const s = data.settings || {};
-    if (s.tmdbKey && !S.settings.tmdbKey) await setSetting('tmdbKey', s.tmdbKey);
     if (s.activity) {
       const a = { ...(S.settings.activity || {}) };
       for (const [k, v] of Object.entries(s.activity)) a[k] = Math.max(a[k] || 0, v);
