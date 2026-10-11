@@ -49,6 +49,8 @@ En manhwas, mangas y animes con link verás dos botones:
 - **▶ Siguiente · Cap. N+1**: abre el próximo capítulo y te ofrece marcarlo como leído.
 - **↺ Último visto · Cap. N**: vuelve a abrir el capítulo en el que quedaste.
 
+**Sitios donde el link no trae el número del capítulo** (como Olympus): el contador queda bloqueado para que el link y el número nunca se desfasen. Para avanzar toca **🔗 Nuevo capítulo**: primero pegas el link del último capítulo que leíste y después eliges qué número es.
+
 **Al volver a la app después de leer**, te pregunta *"¿Hasta qué capítulo llegaste?"* con el número ya propuesto (botones +1, +2, +5, +10) y un campo para pegar el link del capítulo donde quedaste. Así el contador y **Último visto** quedan al día aunque el sitio no ponga el número del capítulo en el link (por ejemplo, si estabas en el 30 y leíste hasta el 200). También puedes abrir esa pregunta cuando quieras con *📝 ¿Leíste más?* en la obra.
 
 También puedes **pegar el link de un capítulo nuevo** (botón *Pegar link* arriba en el inicio): si la obra ya existe, la app actualiza el progreso en vez de duplicarla.

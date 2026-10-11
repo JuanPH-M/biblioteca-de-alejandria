@@ -1037,3 +1037,21 @@ body.no-scroll #toasts { bottom: auto; top: calc(var(--safe-t) + 12px); }
 .ci-quick { justify-content: center; margin: 12px 0 2px; flex-wrap: wrap; padding: 0; }
 .ci-hint { display: block; font-size: 12px; line-height: 1.4; }
 input.bump { animation: numPop .35s var(--spring); }
+
+/* ===================== v1.8: link primero ===================== */
+.counter.locked { grid-template-columns: minmax(0, 1fr) 132px; }
+.lf-btn { display: grid; place-items: center; align-content: center; gap: 0; height: 96px !important; font-size: 14px !important; line-height: 1.15; padding: 6px; }
+.lf-btn span { font-size: 22px; }
+.lf-btn b { font-size: 14px; }
+.lf-btn small { font-size: 11px; opacity: .85; font-weight: 600; }
+.lf-note { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 12px; color: var(--muted); line-height: 1.45; }
+.lf-dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0 2px; }
+.lf-dots i { width: 28px; height: 5px; border-radius: 5px; background: var(--surface-2); transition: background .3s, width .3s var(--spring); }
+.lf-dots i.on { background: var(--accent); width: 40px; }
+.lf-step { animation: viewIn .3s var(--ease) both; }
+.lf-msg { min-height: 2.6em; margin: 8px 2px 0; }
+.lf-msg.ok { color: var(--success); }
+.lf-prev { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface-2); font-size: 12.5px; margin-bottom: 12px; min-width: 0; }
+.lf-prev span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lock-hint { grid-column: 1 / -1; font-size: 11.5px; }
+input:disabled { opacity: .55; }

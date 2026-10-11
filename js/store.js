@@ -231,6 +231,15 @@ export function continueTarget(w) {
 
 // Abre un link en el navegador. Se usa un enlace real porque Safari (iPhone)
 // bloquea window.open si no ocurre en el mismo toque del usuario.
+// Obras cuyo link no trae el número del capítulo (no se puede armar el siguiente):
+// el contador solo cambia pegando primero el link del último capítulo.
+export function needsLink(w) {
+  if (!w || isTrackOnly(w) || !TYPES[w.type]) return false;
+  const l = primaryLink(w);
+  if (!l || l.platform !== 'web') return false;
+  return !continueTarget(w)?.next;
+}
+
 export function openUrl(url) {
   const a = document.createElement('a');
   a.href = url;
