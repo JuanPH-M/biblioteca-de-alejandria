@@ -70,14 +70,15 @@ En Android, con la app instalada, también puedes usar **Compartir → Alejandr�
 
 ### 4. Pantalla de inicio
 - **Saludo** al abrir y luego el nombre de la app.
-- **Tarjeta destacada** con lo último que estás siguiendo y su anillo de progreso.
+- **Buscador inteligente**: mientras escribes muestra sugerencias con portada de lo que más se parece (aunque escribas con errores, p. ej. *"solo levlng"*). Toca una para abrirla, o *＋ Agregar* si no la tienes.
+- **Tarjeta destacada** con lo último que estás siguiendo y su anillo de progreso: tócala en cualquier parte para abrir la obra.
 - **🎲 ¿Qué sigue?**: una ruleta que elige al azar qué leer o ver.
 - **Continuar**: carrusel con lo que tienes en curso.
 - **Explorar**: tarjetas grandes por tipo (Todo, Manhwa, Manga, Anime, Serie, Película) y filtros por estado, plataforma y favoritos, buscador y orden.
 - **Mantén presionada una tarjeta** para acciones rápidas: cambiar estado, favorito, editar, siguiente o último capítulo.
 
 ### 5. Plataformas
-En la pestaña **Plataformas** ves todo lo que tienes en Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll y páginas web.
+En la pestaña **Plataformas** ves un resumen y una tarjeta por plataforma (Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll y páginas web) con portadas, cuántas obras tienes y su estado. Al entrar a una ves sus números, lo que tienes en curso y filtros por estado. Si alguna serie o película no tiene plataforma, aparece un aviso para elegirla (también desde las acciones rápidas).
 
 ### 6. Fútbol
 - **🛡️ Equipos**: toca **＋ Agregar equipo o selección**, búscalo y toca **Seguir**. Tus equipos aparecen como recuadros con su próximo partido; toca uno para ver sus próximos partidos y últimos resultados.
