@@ -24,7 +24,7 @@ export function linkReportHTML(parsed) {
       return `<div class="lr warn">${head}${title}<div>¿El capítulo es <b>${parsed.chapter}</b>?</div>
         <div class="row-btns sm"><button class="btn sm primary" data-confirm-yes>Sí, es el capítulo</button><button class="btn sm ghost" data-repick>Elegir otro número</button></div></div>`;
     case 'nochapter':
-      return `<div class="lr info">${head}${title}<div class="small">En este sitio el número del link es un código interno, no el capítulo. Se guarda el link y el capítulo lo pones tú.</div></div>`;
+      return `<div class="lr info">${head}${title}<div class="small">En este sitio el número del link es un código interno, no el capítulo: el capítulo lo llevas con el contador. Tendrás el botón <b>Ver capítulos</b> para elegir el siguiente y <b>Último visto</b> para volver a este.</div></div>`;
     case 'pick':
       return `<div class="lr warn">${head}${title}
         ${parsed.suggest != null ? `<div>Parece que el capítulo es <b>${esc(parsed.numbers[parsed.suggest].raw)}</b>.</div><div class="row-btns sm"><button class="btn sm primary" data-pick="${parsed.suggest}">Sí, es el capítulo</button></div><div class="small muted">O toca otro número del link:</div>`

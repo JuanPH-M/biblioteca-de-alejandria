@@ -112,12 +112,19 @@ const RULES = [
     re: /\/capitulo\/([^/]+)\/([^/?#]+)/i,
     parse(u) {
       const m = u.pathname.match(this.re);
-      if (m) return { slug: m[2], title: slugToTitle(m[2]), chapter: null, mode: 'nochapter' };
-      const s = u.pathname.match(/\/series\/(?:comic-)?([^/?#]+)/i);
-      if (s) return { slug: s[1], title: slugToTitle(s[1]), chapter: null, mode: 'nochapter' };
-      return null;
+      const s = u.pathname.match(/\/series\/([^/?#]+)/i);
+      const slug = m ? m[2] : s ? s[1] : null;
+      if (!slug) return null;
+      // el slug trae "comic-" y una marca de fecha: se quitan para el nombre
+      return { slug, title: slugToTitle(slug.replace(/^(comic|manhwa|manga)-/i, '')), chapter: null, mode: 'nochapter' };
     },
     build: () => null, // el número del link es un id interno, no el capítulo
+    // la página de la serie (lista de capítulos) usa el mismo slug: /series/{slug}
+    series(u) {
+      const m = u.pathname.match(this.re);
+      if (m) return `${u.origin}/series/${m[2]}`;
+      return /\/series\//i.test(u.pathname) ? u.href : null;
+    },
   },
 ];
 export const KNOWN_SITES = RULES.map((r) => r.label);
@@ -218,6 +225,15 @@ export function chapterUrl(rawUrl, n, patterns = {}) {
   const url = new URL(u.href);
   url.pathname = u.pathname.slice(0, num.start) + fmtNum(n) + u.pathname.slice(num.end);
   return url.href;
+}
+
+// Link a la lista de capítulos de la obra (sitios donde no se puede armar el siguiente capítulo)
+export function seriesUrl(rawUrl) {
+  const u = toURL(rawUrl);
+  if (!u) return null;
+  const host = u.hostname.replace(/^www\./, '');
+  const rule = RULES.find((r) => r.test(host) && r.series);
+  return rule ? rule.series(u) : null;
 }
 
 export const nextChapterUrl = (rawUrl, chapter, patterns) => (chapter == null ? null : chapterUrl(rawUrl, nextOf(chapter), patterns));
