@@ -1,4 +1,4 @@
-// Fútbol: mis equipos y ligas en recuadros; al tocar uno se abre su información.
+// Fútbol (dentro de Deportes): mis equipos y ligas en recuadros; al tocar uno se abre su información.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, relTime, hueOf, initials, vibrate, imageToDataURL } from './ui.js';
 import { S, setPref, openUrl } from './store.js';
 import { searchTeams, teamFixtures, ATTRIBUTION, POPULAR_LEAGUES, searchLeagues, leagueOverview, matchInfo } from './api.js';
@@ -72,10 +72,6 @@ export function renderFootball(root, param) {
   rootEl = root;
   if (param === 'ligas' || param === 'equipos') tab = param;
   root.innerHTML = `<div class="fb">
-  <header class="topbar">
-    <div class="grow"><h1 class="page-title big">⚽ Fútbol</h1><p class="sub">Tus equipos y ligas, partido a partido</p></div>
-    <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
-  </header>
   <div class="tabs2" role="tablist">
     <button role="tab" class="${tab === 'equipos' ? 'on' : ''}" data-tab="equipos">🛡️ Equipos <em>${S.teams.length}</em></button>
     <button role="tab" class="${tab === 'ligas' ? 'on' : ''}" data-tab="ligas">🏆 Ligas <em>${(S.settings.leagues || []).length}</em></button>
