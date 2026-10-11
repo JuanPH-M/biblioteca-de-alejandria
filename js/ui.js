@@ -164,7 +164,7 @@ export function confetti(x = innerWidth / 2, y = innerHeight / 2, n = 28) {
 
 // Onda al tocar botones y chips
 document.addEventListener('pointerdown', (e) => {
-  const el = e.target.closest('.btn, .chip, .icon-btn, .cbtn, .fab, .plat-tile, .paste-btn, .qa-btn, .next-pick, .seg button, .tcard, .add-tile, .lg-chip');
+  const el = e.target.closest('.btn, .chip, .icon-btn, .cbtn, .fab, .plat-tile, .paste-btn, .qa-btn, .next-pick, .seg button, .tcard, .add-tile, .lg-chip, .fb-tile, .add-big');
   if (!el || reducedMotion()) return;
   const r = el.getBoundingClientRect();
   const d = Math.max(r.width, r.height) * 2.2;
@@ -239,7 +239,7 @@ export function readFile(file, as = 'text') {
 }
 
 // Reduce una imagen de la galería para guardarla en el teléfono sin ocupar mucho
-export async function imageToDataURL(file, maxW = 480) {
+export async function imageToDataURL(file, maxW = 480, type = 'image/jpeg') {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
@@ -247,7 +247,7 @@ export async function imageToDataURL(file, maxW = 480) {
     const c = document.createElement('canvas');
     c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    return c.toDataURL('image/jpeg', 0.82);
+    return c.toDataURL(type, 0.85);
   } finally { URL.revokeObjectURL(url); }
 }
 
