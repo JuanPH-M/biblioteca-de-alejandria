@@ -41,7 +41,14 @@ App web progresiva (PWA) en español para llevar el control de lo que lees y ves
 
 ### 2. Llevar tu progreso
 - Abre la obra y toca el botón grande **+1** cada vez que termines un capítulo o episodio (**−1** para corregir, o toca el número para escribirlo).
-- En **series** verás *"Vas en T2 · E5"*; si la serie viene de TVmaze, la app sabe cuántos episodios tiene cada temporada y salta sola a la siguiente.
+- En **series** verás *"Vas en T2 · E5"*. La app busca la serie en TVmaze (aunque la hayas agregado a mano) y muestra:
+  - **Temporadas** con sus episodios, si está **finalizada o en emisión**, y cuántos episodios tiene cada temporada. Las **temporadas nuevas se agregan solas** (la app revisa cada día y te avisa).
+  - Cada **episodio con su imagen**, fecha y duración. Toca ○ para marcar visto hasta ahí.
+  - **Sin spoilers**: la sinopsis de los episodios que aún no has visto queda oculta; solo se muestra si la tocas.
+  - **🙈 Mis notas con spoilers** por temporada, escondidas hasta que abras el apartado.
+  - No te deja pasar de los episodios de la temporada ni de la última temporada.
+- En **series y películas** aparece el **🎭 reparto** en pequeño (y en películas la dirección).
+- **Cuándo fue**: en cada obra ves la fecha y hora de tu último capítulo o episodio y de cuándo abriste el link; en las tarjetas aparece en pequeño, y en el inicio está la fecha y hora de hoy.
 - En **películas** toca **Marcar como vista** y se guarda la fecha.
 - **Estados**: debajo de los botones de estado la app explica cada uno. La diferencia más común:
   - **Leyendo / Viendo**: la estás siguiendo y todavía te quedan capítulos o episodios por ponerte al día.
@@ -51,6 +58,8 @@ App web progresiva (PWA) en español para llevar el control de lo que lees y ves
 En manhwas, mangas y animes con link verás dos botones:
 - **▶ Siguiente · Cap. N+1**: abre el próximo capítulo y te ofrece marcarlo como leído.
 - **↺ Último visto · Cap. N**: vuelve a abrir el capítulo en el que quedaste.
+
+**Links guardados**: se guardan solo el **link actual y el anterior**, cada uno con la fecha y hora en que lo guardaste.
 
 **Sitios donde el link no trae el número del capítulo** (como Olympus): el contador queda bloqueado para que el link y el número nunca se desfasen. Para avanzar toca **🔗 Nuevo capítulo**: primero pegas el link del último capítulo que leíste y después eliges qué número es.
 
@@ -214,7 +223,7 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 
 - La app no aloja ni muestra contenido de terceros: solo guarda y abre los links que tú agregas. Los resúmenes de partidos se abren como búsqueda en YouTube.
 - Datos e imágenes de manhwa/manga/anime y recomendaciones: **AniList**. Datos de series: **TVmaze** (CC BY-SA 4.0).
-- Textos de películas y series: **Wikipedia** (CC BY-SA 4.0). Las tendencias de películas y series salen de las estadísticas públicas de visitas de Wikipedia en español.
+- Textos de películas y series: **Wikipedia** (CC BY-SA 4.0). Reparto de películas: **Wikidata** (CC0) con fotos de **Wikimedia Commons**. Temporadas, episodios y reparto de series: **TVmaze**. Las tendencias de películas y series salen de las estadísticas públicas de visitas de Wikipedia en español.
 - Fútbol, NBA, MLB y UFC: datos públicos de **ESPN**. Fórmula 1: **Jolpica F1** (continuación abierta de Ergast). No se muestran escudos ni logos de equipos, ligas o marcas: solo nombres e iniciales con colores.
 
 ## 📄 Licencia

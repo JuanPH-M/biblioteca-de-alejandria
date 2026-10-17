@@ -1,6 +1,6 @@
 // Editor de obras (agregar/editar) y hoja "Pegar link".
 import { $, $$, esc, openSheet, whenSettled, toast, debounce, imageToDataURL, ICONS, coverHTML, confetti, vibrate } from './ui.js';
-import { S, TYPES, STATUSES, TRACK_ONLY, needsLink, statusLabel, statusHint, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, needsLink, statusLabel, statusHint, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel, trimLinks } from './store.js';
 import { PLATFORMS, STREAMING, parseLink, nextChapterUrl, KNOWN_SITES } from './links.js';
 import { searchInfo, ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { render, go, openCheckIn, openLinkFirst } from './app.js';
@@ -374,7 +374,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
   $('#ed-cover-del', el).onclick = () => { w.cover = ''; $('#ed-cover', el).value = ''; refreshCover(); };
 
   // --- links ---
-  if (pendingLink) w.links = [linkFromParsed(pendingLink), ...(w.links || [])];
+  if (pendingLink) w.links = trimLinks([linkFromParsed(pendingLink), ...(w.links || [])]);
   const drawLinks = () => {
     $('#ed-links', el).innerHTML = (w.links || []).map((l) => `
       <div class="link-edit" data-lid="${l.id}">
@@ -408,7 +408,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
   $('#ed-addlink', el).onclick = () => {
     const p = newParsed || parseLink(newLinkInput.value, S.patterns);
     if (!p) { toast('Ese link no es válido.'); return; }
-    w.links = [...(w.links || []), linkFromParsed(p)];
+    w.links = trimLinks([linkFromParsed(p), ...(w.links || [])]);
     if (!titleInput.value.trim() && p.title) { titleInput.value = p.title; w.title = p.title; }
     if (p.chapter != null) {
       const chEl = $('#ed-chapter', el), epEl = $('#ed-episode', el);

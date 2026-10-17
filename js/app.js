@@ -2,14 +2,14 @@
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
 import { S, TYPES, STATUSES, statusLabel, statusHint, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
-import { ATTRIBUTION, tvmazeSeasons } from './api.js';
+import { ATTRIBUTION, tvmazeSeasons, tvmazeShow, tvmazeFind, wikidataIdFor, wikidataCast, pubStatusEs } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
 import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp } from './sections.js';
 import { renderSports } from './sports.js';
 import { renderDiscover, quickPicks, picksHTML, onPickClick } from './discover.js';
 
 const view = $('#view');
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '2.3.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -106,6 +106,7 @@ export function cardHTML(w, i = 0) {
       <div class="card-meta"><span class="sdot" style="--c:${st?.color}"></span><span>${esc(statusLabel(w.status, w.type))}</span></div>
       <div class="card-row">
         <span class="card-prog" data-prog>${esc(progressLabel(w))}</span>
+        ${w.lastRead || w.watchedAt ? `<span class="card-when">🕒 ${esc(fmtWhen(w.lastRead || w.watchedAt))}</span>` : ''}
         ${w.rating ? `<span class="card-stars" aria-label="${w.rating} estrellas">★ ${w.rating}</span>` : ''}
       </div>
     </div>
@@ -126,6 +127,9 @@ function continueList() {
 }
 
 let greeted = false;
+// Fecha y hora de hoy, en pequeño debajo del nombre
+const clockText = () => { const d = new Date(); const t = d.toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+setInterval(() => { const c = document.getElementById('clock'); if (c) c.textContent = clockText(); }, 20000);
 const showInstallHint = () => !isStandalone() && (isIOS() || installPrompt) && !(S.settings.installHint > Date.now() - 30 * 864e5);
 async function renderHome(root) {
   const f = S.filters;
@@ -142,7 +146,7 @@ async function renderHome(root) {
   <header class="topbar">
     <div class="brand">
       <img src="icons/icon.svg" alt="" width="38" height="38">
-      <div class="brand-text"><h1 class="brand-title ${greeted ? '' : 'greeting'}" id="brand-title">${greeted ? 'Biblioteca de Alejandría' : `${hello} <span class="wave">👋</span>`}</h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}</p></div>
+      <div class="brand-text"><h1 class="brand-title ${greeted ? '' : 'greeting'}" id="brand-title">${greeted ? 'Biblioteca de Alejandría' : `${hello} <span class="wave">👋</span>`}</h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}</p><p class="clock" id="clock">${clockText()}</p></div>
     </div>
     <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
   </header>
@@ -365,7 +369,7 @@ function spotlightHTML(w) {
       <h2>${esc(w.title)}</h2>
       <div class="sp-meta">
         ${pct != null ? `<svg class="ring" viewBox="0 0 60 60" aria-label="${pct}%"><circle cx="30" cy="30" r="26" class="ring-bg"/><circle cx="30" cy="30" r="26" class="ring-fg" style="--len:${C};--off:${C * (1 - pct / 100)}"/><text x="30" y="35" text-anchor="middle">${pct}%</text></svg>` : ''}
-        <div><b>${esc(progressLabel(w, false))}</b><small>${relTime(w.lastOpened || w.updatedAt)}</small></div>
+        <div><b>${esc(progressLabel(w, false))}</b><small>🕒 ${fmtWhen(w.lastRead || w.lastOpened || w.updatedAt)}</small></div>
       </div>
       <div class="sp-actions">
         ${t ? (t.next
@@ -735,6 +739,26 @@ function starsHTML(rating) {
 }
 
 const fmtDay = (ts) => new Date(ts).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+// "hoy, 21:34" · "ayer, 21:34" · "14 oct, 21:34"
+export function fmtWhen(ts) {
+  if (!ts) return '';
+  const d = new Date(ts), now = new Date();
+  const time = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return `hoy, ${time}`;
+  if (d.toDateString() === y.toDateString()) return `ayer, ${time}`;
+  return `${d.toLocaleDateString('es', { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) }).replace('.', '')}, ${time}`;
+}
+// Cuándo fue el último avance y cuándo abriste el link
+function lastReadHTML(w) {
+  const t = TYPES[w.type];
+  const rows = [];
+  if (w.type === 'pelicula') { if (w.watchedAt) rows.push(`🎬 La viste ${fmtWhen(w.watchedAt)}`); }
+  else if (w.lastRead) rows.push(`🕒 Último ${t.unitLong} ${t.reading ? 'leído' : 'visto'}: <b>${esc(progressLabel(w, false))}</b> · ${fmtWhen(w.lastRead)}`);
+  if (w.lastOpened && !isTrackOnly(w)) rows.push(`🔗 Abriste el link ${fmtWhen(w.lastOpened)}`);
+  return rows.length ? rows.map((r) => `<span>${r}</span>`).join('') : '';
+}
+function updateLastRead(w, root) { const el = $('#last-read', root); if (el) { el.innerHTML = lastReadHTML(w); el.hidden = !el.innerHTML; } }
 
 function counterHTML(w) {
   const t = TYPES[w.type];
@@ -742,7 +766,7 @@ function counterHTML(w) {
     const seen = w.status === 'terminado';
     return `<section class="panel counter-panel movie-panel">
       <button class="btn ${seen ? 'success' : 'primary'} block lg" id="movie-seen">${seen ? '✓ Vista' : '🎬 Marcar como vista'}</button>
-      <p class="muted small center">${seen ? (w.watchedAt ? `La viste el ${fmtDay(w.watchedAt)}` : 'Ya la viste') : 'Cuando la veas, márcala aquí para llevar tu registro.'}</p>
+      <p class="muted small center">${seen ? (w.watchedAt ? `La viste ${fmtWhen(w.watchedAt)}` : 'Ya la viste') : 'Cuando la veas, márcala aquí para llevar tu registro.'}</p>
     </section>`;
   }
   if (w.type === 'serie') {
@@ -838,12 +862,14 @@ function linksHTML(w) {
   const links = w.links || [];
   return `<section class="panel">
     <div class="sec-head"><h3>Dónde lo ${TYPES[w.type].reading ? 'leo' : 'veo'}</h3><button class="btn sm" id="add-link">${ICONS.plus} Link</button></div>
+    ${links.length ? '<p class="muted xsmall">Se guardan el último link y el anterior.</p>' : ''}
     ${links.length ? `<ul class="links">${links.map((l, i) => {
       const p = PLATFORMS[l.platform] || PLATFORMS.web;
       let shown = l.url; try { const u = new URL(l.url); shown = u.hostname.replace(/^www\./, '') + decodeURI(u.pathname); } catch { /* */ }
       return `<li class="link-row" data-link="${l.id}">
         <span class="pbadge" style="--c:${p.color}">${esc(p.name)}</span>
-        <a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" class="link-url">${esc(shown)}</a>
+        <span class="link-main"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" class="link-url">${esc(shown)}</a>
+        <small class="link-when">${i === 0 ? 'Actual' : 'Anterior'}${l.addedAt ? ` · guardado ${fmtWhen(l.addedAt)}` : ''}</small></span>
         ${i === 0 ? '<span class="muted small" title="Link principal">★</span>' : `<button class="icon-btn xs" data-primary="${l.id}" aria-label="Hacer principal">☆</button>`}
         <button class="icon-btn xs" data-dellink="${l.id}" aria-label="Quitar link">${ICONS.close}</button>
       </li>`;
@@ -881,6 +907,9 @@ async function renderDetail(root, id) {
     ${target ? `<div class="go-row" id="go-row">${goRowHTML(w, target)}</div><button class="link-btn small go-search" id="go-checkin">📝 ¿Leíste más? Registrar hasta dónde llegaste</button>${target.list && target.listGuessed && target.search && target.search !== target.list ? `<button class="link-btn small go-search" id="go-search">🔎 ¿No es la página de capítulos? Buscar la obra en el sitio</button>` : ''}` : ''}
 
     ${counterHTML(w)}
+    <div class="last-read" id="last-read" ${lastReadHTML(w) ? '' : 'hidden'}>${lastReadHTML(w)}</div>
+
+    ${w.type === 'serie' ? '<section class="panel seasons-panel" id="seasons-panel" hidden></section>' : ''}
 
     <section class="panel">
       <h3>Estado</h3>
@@ -893,6 +922,8 @@ async function renderDetail(root, id) {
     ${isTrackOnly(w) ? platformPanelHTML(w) : linksHTML(w)}
 
     ${w.synopsis ? `<section class="panel"><h3>Sinopsis</h3><p class="synopsis clamp" id="synopsis">${esc(w.synopsis)}</p><button class="link-btn" id="more">Ver más</button></section>` : ''}
+
+    ${isTrackOnly(w) ? '<section class="panel cast-panel" id="cast-panel" hidden></section>' : ''}
 
     <section class="panel">
       <div class="sec-head"><h3>Notas</h3><span class="muted small" id="note-state"></span></div>
@@ -947,18 +978,26 @@ async function renderDetail(root, id) {
     if (d > 0) { floatText(b, '+1'); milestone(w, b); }
     refreshContinue(w, root);
     updatePbar(w, root);
+    updateLastRead(w, root);
+    if (w.type === 'serie') drawSeasons(w, root);
     if (w.justFinished) { delete w.justFinished; finishPrompt(w); }
   }));
   $('#num', root)?.addEventListener('click', (e) => (needsLink(w) ? openLinkFirst(w, { mode: 'manual' }) : editNumber(w, e.currentTarget, root)));
   $('#lf-open', root)?.addEventListener('click', () => openLinkFirst(w, { mode: 'manual' }));
+  const lastSeason = () => ((w.seasons || []).length ? Math.max(...w.seasons.map((x) => x.n)) : Infinity);
   root.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', async () => {
-    await setProgress(w, { season: (w.progress.season || 1) + +b.dataset.season });
+    const want = (w.progress.season || 1) + +b.dataset.season;
+    if (want > lastSeason()) { toast(`${w.title} tiene ${lastSeason()} ${lastSeason() === 1 ? 'temporada' : 'temporadas'}`, { icon: '📺' }); return; }
+    await setProgress(w, { season: want });
     refreshSeries(w, root, +b.dataset.season);
+    drawSeasons(w, root);
   }));
   $('#new-season', root)?.addEventListener('click', async () => {
+    if ((w.progress.season || 1) >= lastSeason()) { toast(`Esa es la última temporada${seriesInfo.get(w.id)?.ended ? ': la serie terminó' : ' anunciada por ahora'}`, { icon: '📺' }); return; }
     await setProgress(w, { season: (w.progress.season || 1) + 1 });
     w.progress.episode = 0; await saveWork(w);
     refreshSeries(w, root, 1);
+    drawSeasons(w, root);
     toast(`Temporada ${w.progress.season}: listo para el episodio 1`, { icon: '📺' });
   });
   $('#movie-seen', root)?.addEventListener('click', async (e) => {
@@ -991,15 +1030,8 @@ async function renderDetail(root, id) {
     vibrate(8);
     render({ keepScroll: true });
   });
-  if (w.type === 'serie' && w.source?.api === 'tvmaze' && navigator.onLine && (!w.seasons || Date.now() - (w.seasonsAt || 0) > 3 * 864e5)) {
-    tvmazeSeasons(w.source.id).then(async (seasons) => {
-      if (!seasons.length) return;
-      const changed = JSON.stringify(seasons) !== JSON.stringify(w.seasons);
-      w.seasons = seasons; w.seasonsAt = Date.now();
-      await saveWork(w, { touch: false });
-      if (changed && location.hash.endsWith(w.id)) render({ keepScroll: true });
-    }).catch(() => {});
-  }
+  if (w.type === 'serie') loadSeriesInfo(w, root);
+  if (w.type === 'pelicula') loadCast(w, root);
 
   // links
   $('#add-link', root)?.addEventListener('click', () => openPasteSheet({ work: w }));
@@ -1030,6 +1062,158 @@ async function renderDetail(root, id) {
     go('#/');
     toast('Obra eliminada', { action: 'Deshacer', onAction: async () => { await saveWork(copy, { touch: false }); render(); } });
   };
+}
+
+// ======================= SERIES: temporadas, episodios y reparto =======================
+async function checkNewSeasons() {
+  if (!navigator.onLine) return;
+  const due = S.works.filter((w) => w.type === 'serie' && tvIdOf(w) && w.status !== 'abandonado' && Date.now() - (w.seasonsAt || 0) > 864e5).slice(0, 8);
+  for (const w of due) {
+    try {
+      const info = await tvmazeShow(tvIdOf(w), { force: true });
+      const seasons = info.seasons.map((x) => ({ n: x.n, eps: x.eps }));
+      const old = (w.seasons || []).length;
+      if (seasons.length) w.seasons = seasons;
+      w.seasonsAt = Date.now();
+      const st = pubStatusEs(info.status);
+      if (st) w.pubStatus = st;
+      await saveWork(w, { touch: false });
+      if (old && seasons.length > old) toast(`📺 ¡${w.title} tiene temporada nueva! Ya son ${seasons.length}.`, { timeout: 6000 });
+    } catch { /* se intenta otro día */ }
+  }
+}
+const seriesInfo = new Map(); // id de la obra → datos de TVmaze (solo en memoria)
+const pickedSeason = new Map();
+const normT = (t = '') => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+const tvIdOf = (w) => (w.source?.api === 'tvmaze' ? w.source.id : w.tvmazeId || null);
+
+async function loadSeriesInfo(w, root) {
+  try {
+    let id = tvIdOf(w);
+    // series agregadas a mano o desde Wikipedia: se busca en TVmaze una con el mismo nombre
+    if (!id && !w.tvmazeTried && navigator.onLine) {
+      const f = await tvmazeFind(w.title);
+      w.tvmazeTried = true;
+      if (f && [w.title, ...(w.aliases || [])].some((t) => normT(t) === normT(f.name))) { w.tvmazeId = f.id; id = f.id; }
+      await saveWork(w, { touch: false });
+    }
+    if (!id) { loadCast(w, root); return; }
+    const old = (w.seasons || []).length;
+    const stale = !w.seasonsAt || Date.now() - w.seasonsAt > (/Running|emisi/i.test(w.pubStatus || '') ? 12 * 3600e3 : 7 * 864e5);
+    const info = await tvmazeShow(id, { force: stale && navigator.onLine });
+    seriesInfo.set(w.id, info);
+    // temporadas siempre al día: si sale una nueva se agrega sola
+    const seasons = info.seasons.map((x) => ({ n: x.n, eps: x.eps }));
+    if (seasons.length && JSON.stringify(seasons) !== JSON.stringify(w.seasons)) {
+      w.seasons = seasons;
+      if (old && seasons.length > old) toast(`¡${w.title} tiene temporada nueva! Ya son ${seasons.length}.`, { icon: '📺', timeout: 6000 });
+    }
+    w.seasonsAt = Date.now();
+    const st = pubStatusEs(info.status);
+    if (st) w.pubStatus = st;
+    await saveWork(w, { touch: false });
+    if (!root.isConnected || !location.hash.endsWith(w.id)) return;
+    refreshSeries(w, root, 0);
+    drawSeasons(w, root);
+    drawCast(root, info.cast);
+  } catch { /* sin conexión: se queda con lo guardado */ }
+}
+
+function drawSeasons(w, root) {
+  const panel = $('#seasons-panel', root);
+  const info = seriesInfo.get(w.id);
+  if (!panel || !info || !info.seasons.length) return;
+  const cur = w.progress.season || 1, ep = w.progress.episode || 0;
+  const sel = pickedSeason.get(w.id) || cur;
+  const total = info.seasons.reduce((a, x) => a + x.eps, 0);
+  const seen = (sn, n) => sn < cur || (sn === cur && n <= ep);
+  const season = info.seasons.find((x) => x.n === sel) || info.seasons[0];
+  const eps = info.episodes.filter((e) => e.s === season.n);
+  const year = (d) => (d ? d.slice(0, 4) : '');
+  const fmtD = (d) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '') : '');
+  const now = Date.now();
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="sec-head"><h3>📺 Temporadas</h3><span class="muted small">${info.ended ? 'Finalizada' : 'En emisión'} · ${info.seasons.length} ${info.seasons.length === 1 ? 'temporada' : 'temporadas'} · ${total} episodios</span></div>
+    <div class="season-chips scroll-x">${info.seasons.map((x) => {
+      const done = x.n < cur || (x.n === cur && ep >= x.eps);
+      return `<button class="season-chip ${x.n === season.n ? 'on' : ''} ${done ? 'done' : ''} ${x.n === cur ? 'now' : ''}" data-pick-season="${x.n}"><b>T${x.n}</b><small>${x.eps} ep.${done ? ' ✓' : ''}</small></button>`;
+    }).join('')}</div>
+    <div class="season-head">
+      <b>Temporada ${season.n}</b>
+      <span class="muted small">${season.eps} episodios${season.premiere ? ` · ${year(season.premiere)}${season.end && year(season.end) !== year(season.premiere) ? `–${year(season.end)}` : ''}` : ''}${season.aired < season.eps ? ` · ${season.aired} emitidos` : ''}</span>
+    </div>
+    <ul class="ep-list">${eps.map((e) => {
+      const isSeen = seen(e.s, e.n), isNext = e.s === cur && e.n === ep + 1;
+      const future = e.stamp && new Date(e.stamp).getTime() > now;
+      return `<li class="ep-row ${isSeen ? 'seen' : ''} ${isNext ? 'next' : ''} ${future ? 'future' : ''}">
+        <div class="ep-img">${e.image ? `<img src="${esc(e.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<span>E${e.n}</span></div>
+        <div class="ep-text">
+          <b>${e.n}. ${esc(e.name || `Episodio ${e.n}`)}</b>
+          <small>${future ? `Sale el ${fmtD(e.date)}` : fmtD(e.date)}${e.runtime ? ` · ${e.runtime} min` : ''}${isNext ? ' · <em>el que sigue</em>' : ''}</small>
+          ${e.summary ? (isSeen ? `<p class="ep-sum">${esc(e.summary)}</p>` : `<button class="ep-spoil" data-reveal>🙈 Sinopsis oculta para no darte spoilers · tocar para leerla</button><p class="ep-sum" hidden>${esc(e.summary)}</p>`) : ''}
+        </div>
+        ${future ? '' : `<button class="ep-mark ${isSeen ? 'on' : ''}" data-mark="${e.s}:${e.n}" aria-label="${isSeen ? 'Visto' : 'Marcar visto hasta aquí'}">${isSeen ? '✓' : '○'}</button>`}
+      </li>`;
+    }).join('')}</ul>
+    <details class="spoiler-notes">
+      <summary>🙈 Mis notas con spoilers · temporada ${season.n}</summary>
+      <textarea rows="3" data-snotes="${season.n}" placeholder="Lo que pasó en esta temporada (queda escondido hasta que abras este apartado)">${esc((w.seasonNotes || {})[season.n] || '')}</textarea>
+    </details>
+    <p class="muted xsmall">Toca ○ para marcar visto hasta ese episodio. Datos de TVmaze (CC BY-SA 4.0).</p>`;
+  if (!panel.dataset.bound) {
+    panel.dataset.bound = '1';
+    panel.addEventListener('click', async (e) => {
+      const c = e.target.closest('[data-pick-season]');
+      if (c) { pickedSeason.set(w.id, +c.dataset.pickSeason); vibrate(5); drawSeasons(w, root); return; }
+      const r = e.target.closest('[data-reveal]');
+      if (r) { r.nextElementSibling.hidden = false; r.nextElementSibling.classList.add('open'); r.remove(); return; }
+      const sum = e.target.closest('.ep-sum');
+      if (sum) { sum.classList.toggle('open'); return; }
+      const m = e.target.closest('[data-mark]');
+      if (m) {
+        const [sn, n] = m.dataset.mark.split(':').map(Number);
+        const beforeS = w.progress.season || 1, beforeE = w.progress.episode || 0;
+        // tocar el último visto lo desmarca
+        const isLast = sn === beforeS && n === beforeE;
+        await setProgress(w, { season: sn, episode: isLast ? n - 1 : n });
+        if (w.status === 'pendiente') { w.status = 'viendo'; await saveWork(w); }
+        vibrate(10);
+        const fwd = sn > beforeS || (sn === beforeS && (w.progress.episode || 0) > beforeE);
+        refreshSeries(w, root, fwd ? 1 : -1);
+        updateLastRead(w, root);
+        refreshContinue(w, root);
+        drawSeasons(w, root);
+        const tot = seriesTotals(w);
+        if (fwd && tot && tot.seen >= tot.total && w.status !== 'terminado' && seriesInfo.get(w.id)?.ended) finishPrompt(w);
+      }
+    });
+    panel.addEventListener('input', debounce(async (e) => {
+      const t = e.target.closest('[data-snotes]');
+      if (!t) return;
+      w.seasonNotes = { ...(w.seasonNotes || {}), [t.dataset.snotes]: t.value };
+      await saveWork(w, { touch: false });
+    }, 500));
+  }
+}
+
+// Reparto: TVmaze (series) o Wikidata (películas y series sin TVmaze)
+async function loadCast(w, root) {
+  try {
+    const qid = await wikidataIdFor(w);
+    if (!qid) return;
+    if (w.wikidataId !== qid) { w.wikidataId = qid; await saveWork(w, { touch: false }); }
+    const c = await wikidataCast(qid);
+    if (root.isConnected) drawCast(root, c.cast, c.directors);
+  } catch { /* sin reparto */ }
+}
+function drawCast(root, cast = [], directors = []) {
+  const panel = $('#cast-panel', root);
+  if (!panel || (!cast.length && !directors.length)) return;
+  const person = (p) => `<li><span class="cast-img">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<i>${esc(p.name.split(' ').map((x) => x[0]).slice(0, 2).join(''))}</i></span><b>${esc(p.name)}</b>${p.role ? `<small>${esc(p.role)}</small>` : ''}</li>`;
+  panel.hidden = false;
+  panel.innerHTML = `<div class="sec-head"><h3>🎭 Reparto</h3>${directors.length ? `<span class="muted small">Dirección: ${esc(directors.map((d) => d.name).join(', '))}</span>` : ''}</div>
+    <ul class="cast-row">${cast.map(person).join('')}</ul>`;
 }
 
 function goRowHTML(w, t) {
@@ -1128,6 +1312,7 @@ async function start() {
   setTimeout(() => $('#splash')?.classList.add('hide'), reducedMotion() ? 0 : 350);
   setTimeout(() => $('#splash')?.remove(), 1200);
   updateOnline();
+  setTimeout(checkNewSeasons, 5000);
   addEventListener('online', updateOnline);
   addEventListener('offline', updateOnline);
   handleShareTarget();
