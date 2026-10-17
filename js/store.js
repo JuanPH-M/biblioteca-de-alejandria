@@ -73,6 +73,10 @@ export async function loadAll() {
     w.links = [];
   }
   if (migrate.length) await db.putMany('works', migrate);
+  // versión anterior: se guardaban todos los links; ahora solo los 2 últimos
+  const tooMany = works.filter((w) => (w.links || []).length > MAX_LINKS);
+  tooMany.forEach((w) => { w.links = trimLinks(w.links); });
+  if (tooMany.length) await db.putMany('works', tooMany);
   S.patterns = Object.fromEntries(patterns.map((p) => [p.host, p]));
   S.teams = teams.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   for (const k of SETTING_KEYS) S.settings[k] = await getSetting(k, S.settings[k]);
@@ -185,6 +189,7 @@ export async function changeProgress(w, delta) {
   const changed = p.episode !== w.progress.episode || p.chapter !== w.progress.chapter || p.season !== w.progress.season;
   w.progress = p;
   if (delta > 0 && changed) {
+    w.lastRead = Date.now();
     if (w.status === 'pendiente') w.status = 'viendo';
     if (w.total && p.chapter >= w.total && w.type !== 'serie' && w.status !== 'terminado') w.justFinished = true;
     await logActivity(delta);
@@ -198,24 +203,35 @@ export async function setProgress(w, { chapter, season, episode }) {
   if (chapter != null && !isNaN(chapter)) {
     const d = chapter - (p.chapter || 0);
     p.chapter = Math.max(0, chapter);
-    if (d > 0) await logActivity(Math.min(d, 50));
+    if (d > 0) { await logActivity(Math.min(d, 50)); w.lastRead = Date.now(); }
   }
-  if (season != null && !isNaN(season)) p.season = Math.max(1, season);
+  // con las temporadas conocidas no se puede pasar de la última ni de los episodios de cada una
+  const maxSeason = (w.seasons || []).length ? Math.max(...w.seasons.map((x) => x.n)) : Infinity;
+  if (season != null && !isNaN(season)) p.season = Math.min(maxSeason, Math.max(1, season));
   if (episode != null && !isNaN(episode)) {
-    const d = episode - (p.episode || 0);
-    p.episode = Math.max(0, episode);
+    const cap = seasonEpisodes({ ...w, progress: p }, p.season || 1) || Infinity;
+    const ep = Math.min(cap, Math.max(0, episode));
+    const d = ep - (p.episode || 0);
+    p.episode = ep;
     p.watched = Math.max(0, (p.watched || 0) + d);
+    if (d > 0) w.lastRead = Date.now();
+  } else if (season != null) {
+    const cap = seasonEpisodes({ ...w, progress: p }, p.season || 1);
+    if (cap && p.episode > cap) p.episode = cap;
   }
   w.progress = p;
   return saveWork(w);
 }
 
 // ---------- links ----------
+// Solo se guardan los 2 últimos links: el actual y el anterior, cada uno con su fecha
+export const MAX_LINKS = 2;
+export const trimLinks = (links) => (links || []).slice(0, MAX_LINKS);
 export function primaryLink(w) {
   return (w.links || [])[0] || null;
 }
 export function linkFromParsed(p) {
-  return { id: uid(), url: p.url, platform: p.platform, host: p.host, slug: p.slug || '', rule: p.rule || null };
+  return { id: uid(), url: p.url, platform: p.platform, host: p.host, slug: p.slug || '', rule: p.rule || null, addedAt: Date.now() };
 }
 
 // Link para el botón "Continuar": siguiente capítulo si se puede armar, si no el link guardado
@@ -324,15 +340,10 @@ export async function applyLinkToWork(w, parsed) {
     await saveWork(w);
     return null;
   }
-  const links = [...(w.links || [])];
-  const sameIdx = links.findIndex((l) => l.host === parsed.host && (!parsed.slug || !l.slug || l.slug === parsed.slug));
+  // el link recién pegado pasa a ser el actual y el que había queda como anterior
   const nl = linkFromParsed(parsed);
-  if (sameIdx >= 0) links[sameIdx] = { ...links[sameIdx], ...nl, id: links[sameIdx].id };
-  else links.unshift(nl);
-  // el link recién pegado pasa a ser el principal
-  const idx = links.findIndex((l) => l.url === nl.url);
-  if (idx > 0) links.unshift(links.splice(idx, 1)[0]);
-  w.links = links;
+  const same = (w.links || []).find((l) => l.url === nl.url);
+  w.links = trimLinks([same ? { ...same, addedAt: Date.now() } : nl, ...(w.links || []).filter((l) => l.url !== nl.url)]);
   let changed = null;
   if (parsed.chapter != null) {
     const cur = currentNumber(w);

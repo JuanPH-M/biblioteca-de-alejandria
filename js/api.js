@@ -635,3 +635,72 @@ export async function wikiTrending(kind) {
   })).data;
   return all.filter((r) => r.kind === kind);
 }
+
+// ======================= SERIES Y PELÍCULAS: temporadas, episodios y reparto =======================
+// Toda la información de una serie de TVmaze: temporadas, episodios (con imagen y resumen) y reparto
+export async function tvmazeShow(showId, { force = false } = {}) {
+  const r = await cached('tvshow:' + showId, 24 * 3600e3, async () => {
+    const s = await fetchJSON(`https://api.tvmaze.com/shows/${showId}?embed[]=episodes&embed[]=seasons&embed[]=cast`);
+    const eps = (s._embedded?.episodes || []).filter((e) => e.season > 0 && e.number != null && e.type !== 'insignificant_special');
+    const seasons = (s._embedded?.seasons || []).filter((x) => x.number > 0).map((x) => {
+      const list = eps.filter((e) => e.season === x.number);
+      return { n: x.number, eps: Math.max(x.episodeOrder || 0, list.length), aired: list.filter((e) => e.airstamp && new Date(e.airstamp) <= new Date()).length, premiere: x.premiereDate || '', end: x.endDate || '', image: x.image?.medium || '' };
+    }).filter((x) => x.eps > 0);
+    return {
+      status: s.status || '', ended: s.status === 'Ended', network: s.network?.name || s.webChannel?.name || '', runtime: s.averageRuntime || s.runtime || null,
+      seasons,
+      episodes: eps.map((e) => ({ s: e.season, n: e.number, name: e.name || '', date: e.airdate || '', stamp: e.airstamp || '', runtime: e.runtime || null, image: e.image?.medium || '', summary: stripHtml(e.summary || '') })),
+      cast: (s._embedded?.cast || []).slice(0, 16).map((c) => ({ name: c.person?.name || '', role: c.character?.name || '', image: c.person?.image?.medium || '' })),
+    };
+  }, force);
+  return { ...r.data, cachedAt: r.cachedAt };
+}
+// Busca en TVmaze una serie con exactamente ese nombre (para series agregadas a mano)
+export async function tvmazeFind(title) {
+  try {
+    const s = await fetchJSON('https://api.tvmaze.com/singlesearch/shows?q=' + encodeURIComponent(title));
+    return s?.id ? { id: s.id, name: s.name } : null;
+  } catch { return null; }
+}
+
+// Reparto de una película o serie desde Wikidata (datos libres CC0; fotos de Wikimedia Commons)
+const wdApi = (params) => {
+  const url = new URL('https://www.wikidata.org/w/api.php');
+  Object.entries({ format: 'json', origin: '*', ...params }).forEach(([k, v]) => url.searchParams.set(k, v));
+  return fetchJSON(url.href, { headers: { 'Api-User-Agent': 'BibliotecaDeAlejandria/2.3 (https://github.com/JuanPH-M/biblioteca-de-alejandria)' } });
+};
+// Busca el elemento de Wikidata de una obra: por su página de Wikipedia o por el nombre
+export async function wikidataIdFor(w) {
+  if (w.wikidataId) return w.wikidataId;
+  try {
+    if (w.source?.api === 'wikipedia' && w.source.id) {
+      const d = await wikiApi('es', { pageids: String(w.source.id), prop: 'pageprops', ppprop: 'wikibase_item' });
+      const q = d?.query?.pages?.[0]?.pageprops?.wikibase_item;
+      if (q) return q;
+    }
+    const hint = w.type === 'pelicula' ? 'película' : 'serie de televisión';
+    const d = await wikiApi('es', { generator: 'search', gsrsearch: `${w.title} ${hint}`, gsrlimit: '5', prop: 'pageprops|description', ppprop: 'wikibase_item' });
+    const kind = w.type === 'pelicula' ? /pel[ií]cula|film/i : /serie|miniserie|telenovela/i;
+    const norm = (t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s*\(.*\)$/, '').replace(/[^a-z0-9]/g, '');
+    const pages = (d?.query?.pages || []).sort((a, b) => a.index - b.index);
+    const hit = pages.find((p) => norm(p.title) === norm(w.title) && kind.test(p.description || '')) || pages.find((p) => norm(p.title) === norm(w.title));
+    return hit?.pageprops?.wikibase_item || null;
+  } catch { return null; }
+}
+export async function wikidataCast(qid) {
+  return (await cached('wdcast:' + qid, 7 * 864e5, async () => {
+    const e = await wdApi({ action: 'wbgetentities', ids: qid, props: 'claims' });
+    const claims = e?.entities?.[qid]?.claims || {};
+    const ids = (claims.P161 || []).map((c) => c.mainsnak?.datavalue?.value?.id).filter(Boolean).slice(0, 14);
+    const directors = (claims.P57 || []).map((c) => c.mainsnak?.datavalue?.value?.id).filter(Boolean).slice(0, 2);
+    const all = [...new Set([...ids, ...directors])];
+    if (!all.length) return { cast: [], directors: [] };
+    const p = await wdApi({ action: 'wbgetentities', ids: all.join('|'), props: 'labels|claims', languages: 'es|en' });
+    const person = (id) => {
+      const x = p?.entities?.[id] || {};
+      const file = x.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+      return { name: x.labels?.es?.value || x.labels?.en?.value || '', role: '', image: file ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=120` : '' };
+    };
+    return { cast: ids.map(person).filter((x) => x.name), directors: directors.map(person).filter((x) => x.name) };
+  })).data;
+}
