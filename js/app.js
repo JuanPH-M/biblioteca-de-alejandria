@@ -1,14 +1,15 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker } from './store.js';
+import { S, TYPES, STATUSES, statusLabel, statusHint, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
 import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp } from './sections.js';
 import { renderSports } from './sports.js';
+import { renderDiscover, quickPicks, picksHTML, onPickClick } from './discover.js';
 
 const view = $('#view');
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.2.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -56,7 +57,7 @@ export async function render({ keepScroll = false } = {}) {
   lastRoute = routeKey;
   const map = {
     home: renderHome, obra: (el) => renderDetail(el, r.param), plataformas: renderPlatforms, plataforma: (el) => renderPlatform(el, r.param),
-    deportes: (el) => renderSports(el, r.param), futbol: (el) => renderSports(el, 'futbol', r.param), stats: renderStats, ajustes: renderSettings, importar: renderImport,
+    descubrir: (el) => renderDiscover(el, r.param), deportes: (el) => renderSports(el, r.param), futbol: (el) => renderSports(el, 'futbol', r.param), stats: renderStats, ajustes: renderSettings, importar: renderImport,
   };
   const fn = map[r.name] || renderHome;
   const update = async () => {
@@ -80,7 +81,7 @@ export async function render({ keepScroll = false } = {}) {
     await update();
     if (changed) { void view.offsetWidth; view.classList.add('view-enter'); }
   }
-  const tab = { home: 'home', obra: 'home', plataformas: 'plataformas', plataforma: 'plataformas', futbol: 'deportes', deportes: 'deportes', stats: 'stats', ajustes: 'stats', importar: 'stats' }[r.name] || 'home';
+  const tab = { home: 'home', obra: 'home', descubrir: 'home', plataformas: 'plataformas', plataforma: 'plataformas', futbol: 'deportes', deportes: 'deportes', stats: 'stats', ajustes: 'stats', importar: 'stats' }[r.name] || 'home';
   $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
 }
 window.addEventListener('hashchange', () => render());
@@ -157,7 +158,10 @@ async function renderHome(root) {
     <div class="suggest" id="suggest" role="listbox" hidden></div>
   </div>
   ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="tablist" aria-label="Obras en curso">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${i}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}</div>` : ''}</div>` : ''}
-  ${total >= 2 && !f.q ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>Deja que la suerte elija qué leer o ver</small></span>${ICONS.sparkle}</button>` : ''}
+  ${!f.q ? `<div class="pick-row ${total >= 2 ? '' : 'solo'}">
+    ${total >= 2 ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>La suerte elige qué seguir</small></span></button>` : ''}
+    <a class="next-pick disc" href="#/descubrir"><span class="dice">✨</span><span><b>Descubrir</b><small>Recomendaciones nuevas y clásicas</small></span></a>
+  </div>` : ''}
   ${rest.length && !f.q ? `
   <section class="continue">
     <div class="sec-head"><h2>Continuar</h2><span class="muted small">${cont.length} en curso</span></div>
@@ -170,6 +174,10 @@ async function renderHome(root) {
           ${t ? `<button class="c-go" data-continue="${w.id}" ${!t.next && t.list ? 'data-mode="list"' : ''} aria-label="Continuar">${ICONS.play}</button>` : ''}</div>
         </div>`; }).join('')}
     </div>
+  </section>` : ''}
+  ${!f.q ? `<section class="continue" id="for-you-sec">
+    <div class="sec-head"><h2>✨ Te puede gustar</h2><a href="#/descubrir" class="link-btn small">Ver más</a></div>
+    <div class="drow" id="for-you">${Array.from({ length: 4 }, (_, i) => `<div class="dcard skel" style="--i:${i}"><span class="dcover"></span><b></b><small></small></div>`).join('')}</div>
   </section>` : ''}
   <div class="${total ? '' : 'hidden'}">
   <div class="sec-head types-head"><h2>Explorar</h2></div>
@@ -265,6 +273,15 @@ async function renderHome(root) {
   root.addEventListener('click', onCardClick);
   if (spot && !f.q) startSpotRotation(root, spotPool);
   $('#next-pick', root)?.addEventListener('click', openRoulette);
+  // recomendaciones en el inicio
+  const fy = $('#for-you', root);
+  if (fy) {
+    fy.addEventListener('click', onPickClick);
+    quickPicks(12).then((list) => {
+      if (!fy.isConnected) return;
+      if (list.length) fy.innerHTML = picksHTML(list); else $('#for-you-sec', root)?.remove();
+    }).catch(() => $('#for-you-sec', root)?.remove());
+  }
   // al volver del detalle, la portada regresa a su tarjeta
   if (lastDetailId) {
     const back = root.querySelector(`[data-id="${lastDetailId}"] .cover`);
@@ -370,7 +387,13 @@ function openRoulette() {
     <div class="seg mini3" id="rl-kind"><button class="on" data-k="all">Todo</button><button data-k="leer">Leer</button><button data-k="ver">Ver</button></div>
     <div class="slot"><div class="slot-reel" id="rl-reel"></div><div class="slot-glow"></div></div>
     <div class="rl-result" id="rl-result"><p class="muted small center">Toca girar y deja que la suerte decida.</p></div>
-    <div class="row-btns"><button class="btn primary lg" id="rl-spin">🎰 Girar</button></div>`, { cls: 'roulette' });
+    <div class="row-btns"><button class="btn primary lg" id="rl-spin">🎰 Girar</button></div>
+    <div class="rl-new"><div class="sec-head"><h4>✨ O prueba algo nuevo</h4><a href="#/descubrir" class="link-btn small" id="rl-more">Ver más</a></div>
+      <div class="drow" id="rl-picks">${Array.from({ length: 3 }, (_, i) => `<div class="dcard skel" style="--i:${i}"><span class="dcover"></span><b></b><small></small></div>`).join('')}</div></div>`, { cls: 'roulette' });
+  const rp = $('#rl-picks', s.el);
+  rp.addEventListener('click', onPickClick);
+  $('#rl-more', s.el).addEventListener('click', (e) => { e.preventDefault(); s.close(); whenSettled(() => go('#/descubrir')); });
+  quickPicks(10).then((list) => { if (rp.isConnected) rp.innerHTML = list.length ? picksHTML(list) : '<p class="muted small">Sin recomendaciones por ahora.</p>'; }).catch(() => { if (rp.isConnected) rp.innerHTML = '<p class="muted small">Sin conexión.</p>'; });
   const reel = $('#rl-reel', s.el), result = $('#rl-result', s.el);
   const H = 186;
   let spinning = false;
@@ -496,6 +519,7 @@ function renderGrid() {
         <button class="btn primary" id="e-add">${ICONS.plus} Agregar obra</button>
         <button class="btn" id="e-paste">${ICONS.link} Pegar link de capítulo</button>
         <a class="btn ghost" href="#/importar">${ICONS.upload} Importar marcadores</a>
+        <a class="btn ghost" href="#/descubrir">✨ Descubrir qué leer o ver</a>
       </div></div>`;
     $('#e-add').onclick = () => openAddChooser();
     $('#e-paste').onclick = () => openPasteSheet();
@@ -620,7 +644,6 @@ export function openCheckIn(w, p = { mode: 'manual' }) {
     if (w.total && currentNumber(w) >= w.total && w.status !== 'terminado') finishPrompt(w);
     render({ keepScroll: true });
   };
-  setTimeout(() => { input.focus(); input.select(); }, 380);
 }
 
 // Paso 1: link del último capítulo · Paso 2: qué número es
@@ -677,7 +700,6 @@ export function openLinkFirst(w, p = { mode: 'manual' }) {
       let shown = parsed.url; try { const u = new URL(parsed.url); shown = u.hostname.replace(/^www\./, '') + decodeURI(u.pathname); } catch { /* */ }
       $('#lf-prev', s.el).innerHTML = `<span class="pbadge" style="--c:${PLATFORMS.web.color}">Link</span><span>${esc(shown)}</span>`;
       if (parsed.chapter != null) num.value = parsed.chapter;
-      setTimeout(() => { num.focus(); num.select(); }, 250);
     }
   };
   next.onclick = () => { if (validate()) goStep(2); };
@@ -705,7 +727,6 @@ export function openLinkFirst(w, p = { mode: 'manual' }) {
     render({ keepScroll: true });
   };
   if (p.url) { urlIn.value = p.url; if (validate()) goStep(2); }
-  else setTimeout(() => urlIn.focus(), 380);
 }
 
 // ---------- detalle ----------
@@ -866,6 +887,7 @@ async function renderDetail(root, id) {
       <div class="chips wrap" id="status-chips">
         ${Object.entries(STATUSES).map(([k, s]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${k}" style="--c:${s.color}"><span class="sdot" style="--c:${s.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
       </div>
+      <p class="status-hint" id="st-hint">${esc(statusHint(w.status, w.type))}</p>
     </section>
 
     ${isTrackOnly(w) ? platformPanelHTML(w) : linksHTML(w)}
@@ -956,6 +978,7 @@ async function renderDetail(root, id) {
     w.status = c.dataset.status;
     await saveWork(w);
     $$('#status-chips .chip', root).forEach((x) => x.classList.toggle('on', x === c));
+    $('#st-hint', root).textContent = statusHint(w.status, w.type);
     if (w.status === 'terminado') { const r = c.getBoundingClientRect(); confetti(r.left + r.width / 2, r.top); vibrate(30); }
   });
 

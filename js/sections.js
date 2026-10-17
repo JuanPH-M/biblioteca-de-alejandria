@@ -49,7 +49,7 @@ export function renderPlatforms(root) {
   </section>
   ${none.length ? `<a href="#/plataforma/${NONE_KEY}" class="banner warn plat-none"><span>🤔 ${none.length} ${none.length === 1 ? 'serie o película no tiene' : 'series o películas no tienen'} plataforma. Tócalo para elegirla.</span><b>›</b></a>` : ''}
   <div class="plat-grid2">
-    ${sorted.map((k, i) => {
+    ${sorted.filter((k) => platformWorks(k).length).map((k, i) => {
       const p = PLATFORMS[k], list = platformWorks(k);
       const going = list.filter((w) => ['viendo', 'emision'].includes(w.status)).length;
       return `<a href="#/plataforma/${k}" class="ptile ${list.length ? '' : 'is-empty'}" style="--c:${p.color};--i:${i}">
@@ -60,6 +60,8 @@ export function renderPlatforms(root) {
       </a>`;
     }).join('')}
   </div>
+  ${sorted.some((k) => !platformWorks(k).length) ? `<h3 class="plat-sub">Sin usar todavía</h3>
+  <div class="plat-minis">${sorted.filter((k) => !platformWorks(k).length).map((k, i) => `<a href="#/plataforma/${k}" class="ptile-mini" style="--c:${PLATFORMS[k].color};--i:${i}"><span class="plat-glyph">${k === 'web' ? ICONS.book : ICONS.play}</span><span><b>${esc(PLATFORMS[k].name)}</b><small>${PLAT_DESC[k]}</small></span></a>`).join('')}</div>` : ''}
   <p class="muted small center pad">Toca una plataforma para ver todo lo que tienes ahí. En series y películas la plataforma se elige dentro de cada obra.</p>`;
   animateCounts(root);
 }

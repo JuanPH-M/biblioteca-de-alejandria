@@ -1,6 +1,6 @@
 // Editor de obras (agregar/editar) y hoja "Pegar link".
 import { $, $$, esc, openSheet, whenSettled, toast, debounce, imageToDataURL, ICONS, coverHTML, confetti, vibrate } from './ui.js';
-import { S, TYPES, STATUSES, TRACK_ONLY, needsLink, statusLabel, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, needsLink, statusLabel, statusHint, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel } from './store.js';
 import { PLATFORMS, STREAMING, parseLink, nextChapterUrl, KNOWN_SITES } from './links.js';
 import { searchInfo, ATTRIBUTION, tvmazeSeasons } from './api.js';
 import { render, go, openCheckIn, openLinkFirst } from './app.js';
@@ -145,8 +145,8 @@ export function openPasteSheet({ work = null, url = '' } = {}) {
     }
   });
 
+  // el teclado no se abre solo: aparece cuando tocas el campo
   if (url) analyze();
-  else setTimeout(() => input.focus(), 350);
 }
 
 const TYPE_HINTS = {
@@ -210,6 +210,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       <div class="chips wrap" id="ed-status">
         ${Object.entries(STATUSES).map(([k, st]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
       </div>
+      <p class="status-hint" id="ed-hint">${esc(statusHint(w.status, w.type))}</p>
     </div>
 
     <div id="ed-progress"></div>
@@ -260,6 +261,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     vibrate(8);
     titleInput.placeholder = TYPE_HINTS[w.type];
     $$('#ed-status .chip', el).forEach((c) => { c.lastChild.textContent = statusLabel(c.dataset.status, w.type); });
+    $('#ed-hint', el).textContent = statusHint(w.status, w.type);
     drawProgress();
     drawKind();
     if (titleInput.value.trim().length >= 2) doSearch();
@@ -285,6 +287,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     if (!c) return;
     w.status = c.dataset.status;
     $$('#ed-status .chip', el).forEach((x) => x.classList.toggle('on', x === c));
+    $('#ed-hint', el).textContent = statusHint(w.status, w.type);
   });
 
   // --- progreso ---

@@ -39,6 +39,19 @@ export function seriesTotals(w) {
   return { total, seen: Math.min(seen, total), lastSeason: seasons[seasons.length - 1].n };
 }
 
+// Qué significa cada estado (se muestra debajo de los botones de estado)
+export function statusHint(status, type) {
+  const r = TYPES[type]?.reading;
+  const u = r ? 'capítulos' : 'episodios';
+  return {
+    pendiente: `Quieres ${r ? 'leerla' : 'verla'} pero aún no empiezas.`,
+    viendo: `${r ? 'La estás leyendo' : 'La estás viendo'} y todavía te quedan ${u} por ponerte al día.`,
+    emision: `Vas al día: llegaste al último ${r ? 'capítulo' : 'episodio'} publicado y esperas que salgan más.`,
+    pausado: 'La dejaste en pausa por un tiempo; piensas seguirla después.',
+    terminado: `${r ? 'La leíste' : 'La viste'} completa.`,
+    abandonado: 'La dejaste y no piensas seguirla.',
+  }[status] || '';
+}
 export const statusLabel = (status, type) => (status === 'viendo' ? (TYPES[type]?.reading ? 'Leyendo' : 'Viendo') : STATUSES[status]?.label || status);
 
 export const S = {
