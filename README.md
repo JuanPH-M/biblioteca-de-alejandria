@@ -43,6 +43,9 @@ App web progresiva (PWA) en español para llevar el control de lo que lees y ves
 - Abre la obra y toca el botón grande **+1** cada vez que termines un capítulo o episodio (**−1** para corregir, o toca el número para escribirlo).
 - En **series** verás *"Vas en T2 · E5"*; si la serie viene de TVmaze, la app sabe cuántos episodios tiene cada temporada y salta sola a la siguiente.
 - En **películas** toca **Marcar como vista** y se guarda la fecha.
+- **Estados**: debajo de los botones de estado la app explica cada uno. La diferencia más común:
+  - **Leyendo / Viendo**: la estás siguiendo y todavía te quedan capítulos o episodios por ponerte al día.
+  - **En emisión**: vas al día; llegaste al último capítulo publicado y esperas que salgan más.
 
 ### 3. Seguir leyendo desde el link
 En manhwas, mangas y animes con link verás dos botones:
@@ -60,6 +63,7 @@ También puedes **pegar el link de un capítulo nuevo** (botón *Pegar link* arr
 | `mhscans.com/series/{nombre}/capitulo-{N}/` | capítulo N, siguiente = N+1 |
 | `leercapitulo.co/leer/{código}/{nombre}/{N}/` | capítulo N, siguiente = N+1 |
 | `manhwaweb.com/leer/{nombre}-_{id}-{N}_{sufijo}` | probable capítulo N (tú lo confirmas una vez) |
+| `olympusxyz.com/series/comic-{nombre}/capitulo/{número}` | nombre y capítulo; arma el siguiente y el anterior, y **Ver capítulos** abre la página de la serie |
 | `olympusxyz.com/capitulo/{id}/{nombre}` | nombre y link; el número es interno, capítulo manual. Botones **Ver capítulos** (lista de la serie) y **Último visto** |
 | Sitios nuevos | te muestra los números del link para que toques el del capítulo y recuerda el patrón |
 | Cualquier sitio sin capítulo siguiente | botón **📚 Ver capítulos**: la app deduce sola la página con todos los capítulos de la obra (y si no puede, la busca dentro del sitio) |
@@ -72,13 +76,22 @@ En Android, con la app instalada, también puedes usar **Compartir → Alejandr�
 - **Saludo** al abrir y luego el nombre de la app.
 - **Buscador inteligente**: mientras escribes muestra sugerencias con portada de lo que más se parece (aunque escribas con errores, p. ej. *"solo levlng"*). Toca una para abrirla, o *＋ Agregar* si no la tienes.
 - **Tarjeta destacada** con lo que estás siguiendo y su anillo de progreso. **Cambia sola cada 5 segundos** entre tus 5 obras en curso (también puedes deslizarla o tocar los puntos) y se abre al tocarla en cualquier parte.
-- **🎲 ¿Qué sigue?**: una ruleta que elige al azar qué leer o ver.
+- **🎲 ¿Qué sigue?**: una ruleta que elige al azar qué leer o ver, y debajo recomendaciones de obras nuevas para ti.
+- **✨ Descubrir** y **Te puede gustar**: recomendaciones (ver abajo).
 - **Continuar**: carrusel con lo que tienes en curso.
 - **Explorar**: tarjetas grandes por tipo (Todo, Manhwa, Manga, Anime, Serie, Película) y filtros por estado, plataforma y favoritos, buscador y orden.
 - **Mantén presionada una tarjeta** para acciones rápidas: cambiar estado, favorito, editar, siguiente o último capítulo.
 
+### 4b. Descubrir (recomendaciones)
+Toca **✨ Descubrir** en el inicio. Hay pestañas **Para ti, Manhwa, Manga, Anime, Series y Películas**:
+- **Para ti / Porque te gustó…**: recomendaciones a partir de tus favoritas y de lo que sigues (las obras que agregaste eligiéndolas de la búsqueda).
+- **En tendencia, Nuevos y Clásicos imprescindibles** de manhwa, manga y anime, y **por género** (acción, romance, fantasía…).
+- **Series**: para ti según tus géneros, las de las que se habla, nuevas, las más seguidas y las mejor calificadas.
+- **Películas**: las de las que se habla y películas de anime populares, nuevas y clásicas.
+- Toca una portada para ver su sinopsis, géneros y calificación, y agrégala como **pendiente** o como **ya la estoy leyendo/viendo**. Las que ya tienes salen con **✓ La tienes**.
+
 ### 5. Plataformas
-En la pestaña **Plataformas** ves un resumen y una tarjeta por plataforma (Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll y páginas web) con portadas, cuántas obras tienes y su estado. Al entrar a una ves sus números, lo que tienes en curso y filtros por estado. Si alguna serie o película no tiene plataforma, aparece un aviso para elegirla (también desde las acciones rápidas).
+En la pestaña **Plataformas** ves un resumen y una tarjeta por plataforma (Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll y páginas web) con portadas, cuántas obras tienes y su estado. Al entrar a una ves sus números, lo que tienes en curso y filtros por estado. Las plataformas que aún no usas aparecen abajo en una fila compacta. Si alguna serie o película no tiene plataforma, aparece un aviso para elegirla (también desde las acciones rápidas).
 
 ### 6. Deportes
 Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UFC**. La app recuerda el último que abriste.
@@ -100,9 +113,9 @@ Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UF
 
 **Fútbol**
 - **🛡️ Equipos**: toca **＋ Agregar equipo o selección**, búscalo (clubes de todo el mundo y selecciones) y toca **Seguir**. Cada recuadro muestra su próximo partido o el marcador en vivo. Al abrirlo ves su posición, la racha de los últimos 5 partidos y sus próximos partidos y resultados en **todas las competiciones** (liga, copa, Libertadores…).
-- **🏆 Ligas**: elige entre las populares (Liga BetPlay, Primera B, Copa Colombia, Champions, Premier, La Liga, Serie A, Bundesliga, Libertadores, Sudamericana, Liga MX, MLS, Mundial, Eliminatorias, Copa América…) o busca cualquier otra por nombre. Dentro de una liga:
+- **🏆 Torneos**: separados en **Ligas** (Liga BetPlay, Primera B, Premier, La Liga, Serie A, Bundesliga, Liga MX, MLS…) y **Copas y torneos** (Champions, Europa League, Libertadores, Sudamericana, Copa Colombia, Mundial, Eliminatorias, Copa América…). También puedes buscar cualquier otro por nombre. Dentro de cada uno:
   - **Partidos**: el calendario completo de la temporada, fecha por fecha.
-  - **Tabla**: la tabla completa con PJ, G, E, P, diferencia de gol y puntos, y los colores de clasificación y descenso. Toca un equipo para seguirlo.
+  - **Tabla** (en las ligas y en la fase de liga o de grupos de los torneos): la tabla completa con PJ, G, E, P, diferencia de gol y puntos, y los colores de clasificación y descenso. Toca un equipo para seguirlo.
   - **Torneos**: otros torneos del mismo país.
 - **📅 Hoy**: todos los partidos del día de tus ligas y equipos, con marcadores en vivo.
 - **Toca un partido** para ver:
@@ -200,8 +213,8 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 ## ⚖️ Atribuciones
 
 - La app no aloja ni muestra contenido de terceros: solo guarda y abre los links que tú agregas. Los resúmenes de partidos se abren como búsqueda en YouTube.
-- Datos e imágenes de manhwa/manga/anime: **AniList**. Datos de series: **TVmaze** (CC BY-SA 4.0).
-- Textos de películas y series: **Wikipedia** (CC BY-SA 4.0).
+- Datos e imágenes de manhwa/manga/anime y recomendaciones: **AniList**. Datos de series: **TVmaze** (CC BY-SA 4.0).
+- Textos de películas y series: **Wikipedia** (CC BY-SA 4.0). Las tendencias de películas y series salen de las estadísticas públicas de visitas de Wikipedia en español.
 - Fútbol, NBA, MLB y UFC: datos públicos de **ESPN**. Fórmula 1: **Jolpica F1** (continuación abierta de Ergast). No se muestran escudos ni logos de equipos, ligas o marcas: solo nombres e iniciales con colores.
 
 ## 📄 Licencia

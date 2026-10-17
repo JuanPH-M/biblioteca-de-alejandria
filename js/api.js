@@ -379,6 +379,8 @@ export const POPULAR_LEAGUES = [
   { id: 'eng.fa', name: 'FA Cup', country: 'Inglaterra', flag: '🏴', c1: '#1e3a8a', c2: '#f87171' },
   { id: 'esp.copa_del_rey', name: 'Copa del Rey', country: 'España', flag: '🇪🇸', c1: '#7c2d12', c2: '#fde047' },
 ];
+// Liga (todos contra todos por temporada) o torneo (copas y competencias internacionales por fases)
+export const isCup = (slug = '') => /^(uefa|conmebol|fifa|concacaf|caf|afc|club)\.|copa|cup|\.fa$|pokal|coppa|coupe|taca|super|friendly/i.test(slug);
 // IDs de la versión anterior (TheSportsDB) → código de ESPN
 export const LEGACY_LEAGUES = {
   4480: 'uefa.champions', 4328: 'eng.1', 4335: 'esp.1', 4332: 'ita.1', 4331: 'ger.1', 4334: 'fra.1', 4497: 'col.1', 4951: 'col.2', 5183: 'col.copa',
@@ -486,3 +488,150 @@ export function posEs(p = '') {
   return POS_ES[x[0]] || p;
 }
 
+
+// ======================= DESCUBRIR (recomendaciones) =======================
+// Manhwa, manga y anime: AniList. Series: TVmaze. Películas y series en tendencia: lo más visto en Wikipedia en español.
+export const ANI_GENRES = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Mystery', 'Psychological', 'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural', 'Thriller'];
+const genreEn = (g) => Object.entries(GENRES_ES).find(([, es]) => es === g)?.[0] || g;
+const ANI_FIELDS = `id title{romaji english native userPreferred} synonyms coverImage{large extraLarge color} description(asHtml:false)
+  genres status chapters episodes countryOfOrigin format siteUrl seasonYear startDate{year} averageScore popularity`;
+const FORMAT_ES = { MOVIE: 'Película', TV: 'Serie', TV_SHORT: 'Serie corta', ONA: 'Web', OVA: 'OVA', SPECIAL: 'Especial', MANGA: '', ONE_SHOT: 'Historia corta', NOVEL: 'Novela', MUSIC: 'Música' };
+function mapAni(m, type) {
+  return {
+    source: 'anilist', sourceId: m.id, sourceUrl: m.siteUrl,
+    title: m.title.english || m.title.romaji || m.title.userPreferred,
+    altTitles: [m.title.romaji, m.title.english, m.title.native, ...(m.synonyms || [])].filter(Boolean),
+    cover: m.coverImage?.extraLarge || m.coverImage?.large || '', color: m.coverImage?.color || null,
+    synopsis: stripHtml(m.description || ''), genres: (m.genres || []).map(genreEs), pubStatus: pubStatusEs(m.status),
+    total: type === 'anime' || type === 'pelicula' ? m.episodes : m.chapters,
+    year: m.seasonYear || m.startDate?.year || null, score: m.averageScore || null,
+    extra: [m.countryOfOrigin === 'KR' ? 'Corea' : m.countryOfOrigin === 'CN' ? 'China' : m.countryOfOrigin === 'JP' ? 'Japón' : m.countryOfOrigin, FORMAT_ES[m.format] ?? m.format].filter(Boolean).join(' · '),
+  };
+}
+const aniQuery = (query, variables) => fetchJSON('https://graphql.anilist.co', {
+  method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ query, variables }),
+});
+const KIND = {
+  manhwa: { type: 'MANGA', country: 'KR' },
+  manga: { type: 'MANGA', country: 'JP' },
+  anime: { type: 'ANIME', formats: ['TV', 'ONA', 'TV_SHORT'] },
+  pelicula: { type: 'ANIME', formats: ['MOVIE'] },
+};
+// mode: trending | new | classic | genre
+export async function discoverAniList(kind, mode, { genre = null, page = 1 } = {}) {
+  const k = KIND[kind];
+  const y = new Date().getFullYear();
+  // AniList no acepta argumentos vacíos: solo se envían los que se usan
+  const args = { type: k.type, sort: ['POPULARITY_DESC'], isAdult: false };
+  if (k.country) args.countryOfOrigin = k.country;
+  if (k.formats) args.format_in = k.formats;
+  if (genre) args.genre_in = [genreEn(genre)];
+  if (mode === 'trending') args.sort = ['TRENDING_DESC'];
+  if (mode === 'new') args.startDate_greater = (y - 1) * 10000 + 101;
+  if (mode === 'classic') { args.sort = ['SCORE_DESC']; args.status = 'FINISHED'; args.popularity_greater = k.type === 'ANIME' ? 40000 : 15000; }
+  const ENUMS = ['type', 'sort', 'format_in', 'status'];
+  const lit = (v, en) => (Array.isArray(v) ? `[${v.map((x) => lit(x, en)).join(',')}]` : typeof v === 'string' && !en ? JSON.stringify(v) : String(v));
+  const argStr = Object.entries(args).map(([n, v]) => `${n}:${lit(v, ENUMS.includes(n))}`).join(',');
+  const key = `dsc:${kind}:${mode}:${genre || ''}:${page}`;
+  return (await cached(key, 12 * 3600e3, async () => {
+    const d = await aniQuery(`query{Page(page:${+page},perPage:24){media(${argStr}){${ANI_FIELDS}}}}`, {});
+    return (d?.data?.Page?.media || []).map((m) => mapAni(m, kind));
+  })).data;
+}
+// "Porque te gustó…": recomendaciones de AniList para una obra
+export async function aniRecommendations(id, kind) {
+  return (await cached(`rec:${id}`, 24 * 3600e3, async () => {
+    const d = await aniQuery(`query($id:Int){Media(id:$id){recommendations(sort:RATING_DESC,perPage:12){nodes{rating mediaRecommendation{${ANI_FIELDS}}}}}}`, { id: +id });
+    return (d?.data?.Media?.recommendations?.nodes || []).filter((n) => n.mediaRecommendation && n.rating > 0).map((n) => mapAni(n.mediaRecommendation, kind));
+  })).data;
+}
+
+// ---------- Series (TVmaze) ----------
+function mapTV(s) {
+  return {
+    source: 'tvmaze', sourceId: s.id, sourceUrl: s.url, title: s.name, altTitles: [],
+    cover: s.image?.medium || s.image?.original || '', synopsis: stripHtml(s.summary || ''), genres: (s.genres || []).map(genreEs),
+    pubStatus: pubStatusEs(s.status), total: null, year: s.premiered ? +s.premiered.slice(0, 4) : null, score: s.rating?.average ? Math.round(s.rating.average * 10) : null,
+    extra: [s.network?.name || s.webChannel?.name, s.language].filter(Boolean).join(' · '), weight: s.weight || 0,
+  };
+}
+// Las series más seguidas de TVmaze (las primeras páginas tienen las más conocidas)
+async function tvPool() {
+  return (await cached('dsc:tvpool', 7 * 864e5, async () => {
+    const pages = await Promise.all([0, 1, 2].map((p) => fetchJSON(`https://api.tvmaze.com/shows?page=${p}`).catch(() => [])));
+    return pages.flat().filter((s) => s.image && (s.weight || 0) >= 90).map(mapTV);
+  })).data;
+}
+// mode: popular | top | new
+export async function discoverTV(mode) {
+  if (mode === 'new') {
+    return (await cached('dsc:tvnew', 12 * 3600e3, async () => {
+      const day = new Date().toISOString().slice(0, 10);
+      const [web, us] = await Promise.all([
+        fetchJSON(`https://api.tvmaze.com/schedule/web?date=${day}`).catch(() => []),
+        fetchJSON(`https://api.tvmaze.com/schedule?date=${day}&country=US`).catch(() => []),
+      ]);
+      const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+      const shows = [...web, ...us].map((e) => e._embedded?.show || e.show).filter((s) => s && s.image && s.premiered && s.premiered >= since);
+      return [...new Map(shows.map((s) => [s.id, s])).values()].sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, 24).map(mapTV);
+    })).data;
+  }
+  const pool = await tvPool();
+  return [...pool].sort((a, b) => (mode === 'top' ? (b.score || 0) - (a.score || 0) : b.weight - a.weight || (b.score || 0) - (a.score || 0))).slice(0, 30);
+}
+export async function tvByGenres(genres) {
+  const pool = await tvPool();
+  return pool.filter((s) => s.genres.some((g) => genres.includes(g))).sort((a, b) => (b.score || 0) - (a.score || 0));
+}
+
+// ---------- Tendencias en Wikipedia en español (películas y series) ----------
+export async function wikiTrending(kind) {
+  const all = (await cached('dsc:wikitrend', 12 * 3600e3, async () => {
+    const d = new Date(Date.now() - 864e5);
+    const ymdS = `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}`;
+    let top;
+    try { top = await fetchJSON(`https://wikimedia.org/api/rest_v1/metrics/pageviews/top/es.wikipedia/all-access/${ymdS}`); } catch {
+      const d2 = new Date(Date.now() - 2 * 864e5);
+      top = await fetchJSON(`https://wikimedia.org/api/rest_v1/metrics/pageviews/top/es.wikipedia/all-access/${d2.getUTCFullYear()}/${String(d2.getUTCMonth() + 1).padStart(2, '0')}/${String(d2.getUTCDate()).padStart(2, '0')}`);
+    }
+    const titles = (top.items?.[0]?.articles || []).map((a) => a.article).filter((t) => !t.includes(':')).slice(0, 450);
+    const pages = [];
+    for (let i = 0; i < titles.length; i += 50) {
+      const r = await wikiApi('es', { titles: titles.slice(i, i + 50).join('|'), prop: 'description' }).catch(() => null);
+      pages.push(...(r?.query?.pages || []));
+    }
+    const isMovie = (ds) => /^(pr[oó]xima )?pel[ií]cula/i.test(ds) && !/saga|serie de pel/i.test(ds);
+    const isSerie = (ds) => /^(mini)?serie|telenovela|^serie/i.test(ds) && !/asesin|criminal|de pel[ií]culas|libros|novelas|videojuegos|historietas/i.test(ds);
+    const order = new Map(titles.map((t, i) => [t.replace(/_/g, ' '), i]));
+    const picked = pages.filter((p) => !p.missing && (isMovie(p.description || '') || isSerie(p.description || '')))
+      .sort((a, b) => (order.get(a.title) ?? 999) - (order.get(b.title) ?? 999)).slice(0, 40);
+    if (!picked.length) return [];
+    // portada, resumen y póster (desde Wikipedia en inglés, donde suelen estar los pósters)
+    const info = await wikiApi('es', { titles: picked.map((p) => p.title).join('|'), prop: 'pageimages|extracts|langlinks|info', inprop: 'url', exintro: '1', explaintext: '1', exsentences: '4', exlimit: 'max', piprop: 'thumbnail', pithumbsize: '500', lllang: 'en', lllimit: 'max' });
+    const byTitle = Object.fromEntries((info?.query?.pages || []).map((p) => [p.title, p]));
+    const enTitles = picked.map((p) => byTitle[p.title]?.langlinks?.[0]?.title).filter(Boolean);
+    const enThumbs = {};
+    if (enTitles.length) {
+      try {
+        const en = await wikiApi('en', { titles: enTitles.join('|'), prop: 'pageimages', piprop: 'thumbnail', pithumbsize: '500', pilicense: 'any', redirects: '1' });
+        const redirects = Object.fromEntries((en?.query?.redirects || []).map((r) => [r.to, r.from]));
+        for (const p of en?.query?.pages || []) if (p.thumbnail) enThumbs[redirects[p.title] || p.title] = p.thumbnail;
+      } catch { /* sin póster */ }
+    }
+    return picked.map((p) => {
+      const x = byTitle[p.title] || {};
+      const enT = x.langlinks?.[0]?.title || '';
+      const th = portrait(enThumbs[enT]) ? enThumbs[enT] : portrait(x.thumbnail) ? x.thumbnail : enThumbs[enT] || x.thumbnail;
+      const year = (p.description || '').match(/\b((?:19|20)\d{2})\b/)?.[1];
+      return {
+        kind: isMovie(p.description || '') ? 'pelicula' : 'serie',
+        source: 'wikipedia', sourceId: x.pageid || p.pageid, sourceUrl: x.fullurl || '',
+        title: p.title.replace(/\s*\((pel[ií]cula|serie de televisi[oó]n|serie|miniserie|telenovela|película de \d{4}|miniserie \d{4}|serie de \d{4}|\d{4})\)$/i, ''),
+        altTitles: [enT.replace(/\s*\((film|TV series|miniseries|\d{4} film|\d{4} TV series)\)$/i, '')].filter(Boolean),
+        cover: th?.source || '', synopsis: (x.extract || '').trim(), genres: [], pubStatus: '', total: null,
+        year: year ? +year : null, extra: p.description || '',
+      };
+    }).filter((r) => r.cover);
+  })).data;
+  return all.filter((r) => r.kind === kind);
+}

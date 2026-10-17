@@ -110,17 +110,28 @@ const RULES = [
     label: 'Olympus',
     test: (host) => /olympus/.test(host),
     re: /\/capitulo\/([^/]+)\/([^/?#]+)/i,
+    // formato nuevo: /series/comic-{nombre}/capitulo/{número del capítulo}
+    reNew: /\/series\/([^/]+)\/capitulo\/(\d+(?:\.\d+)?)\/?$/i,
     parse(u) {
+      const n = u.pathname.match(this.reNew);
+      if (n) return { slug: n[1], title: slugToTitle(n[1].replace(/^(comic|manhwa|manga|manhua)-/i, '')), chapter: parseFloat(n[2]), mode: 'known' };
       const m = u.pathname.match(this.re);
       const s = u.pathname.match(/\/series\/([^/?#]+)/i);
       const slug = m ? m[2] : s ? s[1] : null;
       if (!slug) return null;
-      // el slug trae "comic-" y una marca de fecha: se quitan para el nombre
-      return { slug, title: slugToTitle(slug.replace(/^(comic|manhwa|manga)-/i, '')), chapter: null, mode: 'nochapter' };
+      // formato viejo: el número del link es un id interno, no el capítulo
+      return { slug, title: slugToTitle(slug.replace(/^(comic|manhwa|manga|manhua)-/i, '')), chapter: null, mode: 'nochapter' };
     },
-    build: () => null, // el número del link es un id interno, no el capítulo
-    // la página de la serie (lista de capítulos) usa el mismo slug: /series/{slug}
+    build(u, n) {
+      if (!this.reNew.test(u.pathname)) return null;
+      const url = new URL(u.href);
+      url.pathname = url.pathname.replace(/\/capitulo\/\d+(?:\.\d+)?\/?$/i, '/capitulo/' + fmtNum(n));
+      return url.href;
+    },
+    // la página de la serie (lista de capítulos): /series/{slug}
     series(u) {
+      const n = u.pathname.match(this.reNew);
+      if (n) return `${u.origin}/series/${n[1]}`;
       const m = u.pathname.match(this.re);
       if (m) return `${u.origin}/series/${m[2]}`;
       return /\/series\//i.test(u.pathname) ? u.href : null;

@@ -2,7 +2,7 @@
 // y cada partido con goles, tarjetas, cambios, alineaciones y estadísticas.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, relTime, hueOf, vibrate, imageToDataURL } from './ui.js';
 import { S, setPref, openUrl } from './store.js';
-import { ATTRIBUTION, POPULAR_LEAGUES, LEGACY_LEAGUES, soccerSearchTeams, soccerSearchLeagues, soccerTeamSchedule, soccerCalendar, soccerSummary, posEs, sportDay, sportStandings } from './api.js';
+import { ATTRIBUTION, POPULAR_LEAGUES, LEGACY_LEAGUES, isCup, soccerSearchTeams, soccerSearchLeagues, soccerTeamSchedule, soccerCalendar, soccerSummary, posEs, sportDay, sportStandings } from './api.js';
 import { avatar, gameCard, statusEs, centerIn, dayLabel, addDays, cap, fmtDay, fmtLong, ytSearch, loading, errorBox, updated, tickCountdowns } from './sports.js';
 import { db } from './db.js';
 
@@ -29,6 +29,8 @@ function leagueBadge(lg, size = '') {
 }
 // "3rd in Colombian Primera A" → "3.º en Liga BetPlay"
 const standingEs = (t = '', slug = '') => t.replace(/^(\d+)(?:st|nd|rd|th) in (.+)$/, (_, n, lg) => `${n}.º en ${leagueName(slug) || lg}`);
+const PHASES = { 'league phase': 'Fase de liga', 'group stage': 'Fase de grupos', 'knockout round playoffs': 'Repechaje', 'round of 32': 'Dieciseisavos', 'rd of 32': 'Dieciseisavos', 'round of 16': 'Octavos de final', 'rd of 16': 'Octavos de final', quarterfinals: 'Cuartos de final', semifinals: 'Semifinales', final: 'Final', 'regular season': 'Temporada regular', playoffs: 'Playoffs' };
+const phaseEs = (t = '') => PHASES[t.toLowerCase().trim()] || t.replace(/^\d{4}(-\d{2,4})?\s+/, '');
 const dateOf = (iso) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, 12); };
 const isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const rival = (g, id) => (g.home.id === id ? g.away : g.home);
@@ -79,7 +81,7 @@ export function renderFootball(root, param) {
   root.innerHTML = `<div class="fb">
   <div class="tabs2 three" role="tablist">
     <button role="tab" class="${tab === 'equipos' ? 'on' : ''}" data-tab="equipos">🛡️ Equipos <em>${S.teams.length}</em></button>
-    <button role="tab" class="${tab === 'ligas' ? 'on' : ''}" data-tab="ligas">🏆 Ligas <em>${(S.settings.leagues || []).length}</em></button>
+    <button role="tab" class="${tab === 'ligas' ? 'on' : ''}" data-tab="ligas">🏆 Torneos <em>${(S.settings.leagues || []).length}</em></button>
     <button role="tab" class="${tab === 'hoy' ? 'on' : ''}" data-tab="hoy">📅 Hoy</button>
     <i class="tabs2-pill" style="--x:${TABS.indexOf(tab)}"></i>
   </div>
@@ -276,14 +278,16 @@ function drawLeagues(body) {
   const mine = S.settings.leagues || [];
   body.innerHTML = `
     <button class="add-big" id="add-league"><span>＋</span><b>Agregar liga o torneo</b></button>
-    <div class="fb-grid" id="lg-grid">${mine.map((lg, i) => { const st = leagueStyle(lg); return `
+    <div id="lg-grid">${[['🏟️ Ligas', mine.filter((l) => !isCup(l.id))], ['🏆 Copas y torneos', mine.filter((l) => isCup(l.id))]].filter(([, l]) => l.length).map(([title, list]) => `
+      <h3 class="fb-sec">${title}</h3>
+      <div class="fb-grid">${list.map((lg, i) => { const st = leagueStyle(lg); return `
       <button class="fb-tile lg-tile" data-lg="${esc(lg.id)}" style="--i:${i};--c1:${st.c1};--c2:${st.c2}">
         ${leagueBadge(lg, 'md')}
         <b>${esc(lg.name)}</b>
         <small>${esc(lg.country || '')}</small>
         <span class="fb-next" id="lgn-${esc(lg.id.replace(/\W/g, '_'))}"><span class="dots"><i></i><i></i><i></i></span></span>
-      </button>`; }).join('')}</div>
-    ${mine.length ? '' : `<div class="empty small"><div class="empty-art"><span>🏆</span></div><h3>Sigue tus ligas</h3><p class="muted">Toca "Agregar liga o torneo" para elegir la Champions, la Premier, la liga colombiana y más.</p></div>`}`;
+      </button>`; }).join('')}</div>`).join('')}</div>
+    ${mine.length ? '' : `<div class="empty small"><div class="empty-art"><span>🏆</span></div><h3>Sigue tus ligas y torneos</h3><p class="muted">Toca "Agregar liga o torneo" para elegir la Liga BetPlay, la Premier, la Champions, la Libertadores y más.</p></div>`}`;
   $('#add-league', body).onclick = openLeagueSearch;
   $('#lg-grid', body).addEventListener('click', (e) => {
     const t = e.target.closest('[data-lg]');
@@ -296,7 +300,7 @@ function drawLeagues(body) {
       if (!el?.isConnected) return;
       const today = isoOf(new Date());
       const next = c.data.dates.find((d) => d >= today);
-      el.innerHTML = next ? (next === today ? '⚽ Hay partidos hoy' : `📅 Próxima fecha: ${esc(fmtDay(dateOf(next)))}`) : (c.data.season ? esc(c.data.season) : 'Toca para ver partidos');
+      el.innerHTML = next ? (next === today ? '⚽ Hay partidos hoy' : `📅 Próxima fecha: ${esc(fmtDay(dateOf(next)))}`) : (c.data.season ? esc(phaseEs(c.data.season)) : 'Toca para ver partidos');
     } catch { if (el?.isConnected) el.textContent = 'Toca para ver partidos'; }
   });
 }
@@ -307,7 +311,7 @@ async function followLeague(lg) {
   list.push({ id: lg.id, name: lg.name, country: lg.country || '' });
   await setPref('leagues', list);
   vibrate(12);
-  toast(`Sigues ${lg.name}`, { icon: '🏆' });
+  toast(`Sigues ${isCup(lg.id) ? 'el torneo' : 'la liga'} ${lg.name}`, { icon: isCup(lg.id) ? '🏆' : '🏟️' });
   refresh();
   return true;
 }
@@ -319,9 +323,10 @@ function openLeagueSearch() {
     <div class="searchbar in-sheet"><span class="ic">${ICONS.search}</span>
       <input id="ls-q" type="search" placeholder="Nombre o país (p. ej. Liga MX, Chile, Eredivisie)" autocomplete="off" enterkeyhint="search"></div>
     <div id="ls-res"></div>
-    <h4 class="ls-title">Populares</h4>
-    <div class="lg-popgrid">${POPULAR_LEAGUES.map((p, i) => `<button class="lg-chip ${mine().some((l) => l.id === p.id) ? 'on' : ''}" data-pop="${p.id}" style="--c1:${p.c1};--c2:${p.c2};--i:${i}"><span class="lg-flag">${p.flag}</span><b>${esc(p.name)}</b><small>${esc(p.country)}</small>${mine().some((l) => l.id === p.id) ? '<i class="lg-check">✓</i>' : ''}</button>`).join('')}</div>`, { cls: 'tall' });
-  $('.lg-popgrid', s.el).addEventListener('click', async (e) => {
+    ${[['🏟️ Ligas', POPULAR_LEAGUES.filter((p) => !isCup(p.id))], ['🏆 Copas y torneos', POPULAR_LEAGUES.filter((p) => isCup(p.id))]].map(([title, pops]) => `
+    <h4 class="ls-title">${title}</h4>
+    <div class="lg-popgrid">${pops.map((p, i) => `<button class="lg-chip ${mine().some((l) => l.id === p.id) ? 'on' : ''}" data-pop="${p.id}" style="--c1:${p.c1};--c2:${p.c2};--i:${i}"><span class="lg-flag">${p.flag}</span><b>${esc(p.name)}</b><small>${esc(p.country)}</small>${mine().some((l) => l.id === p.id) ? '<i class="lg-check">✓</i>' : ''}</button>`).join('')}</div>`).join('')}`, { cls: 'tall' });
+  s.el.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-pop]');
     if (!b || b.classList.contains('on')) return;
     if (await followLeague(popular(b.dataset.pop))) {
@@ -340,7 +345,7 @@ function openLeagueSearch() {
       found = (await soccerSearchLeagues(v)).filter((l) => !popular(l.id));
       if (tk !== token) return;
       res.innerHTML = found.length ? `<ul class="team-results">${found.map((l, i) => `<li style="--i:${i}">${leagueBadge(l, 'sm')}<div class="grow"><b>${esc(l.name)}</b></div>
-        ${mine().some((x) => x.id === l.id) ? '<span class="tag ok">Siguiendo</span>' : `<button class="btn sm primary" data-addlg="${esc(l.id)}">Seguir</button>`}</li>`).join('')}</ul>`
+        <small class="tag">${isCup(l.id) ? 'Torneo' : 'Liga'}</small>${mine().some((x) => x.id === l.id) ? '<span class="tag ok">Siguiendo</span>' : `<button class="btn sm primary" data-addlg="${esc(l.id)}">Seguir</button>`}</li>`).join('')}</ul>`
         : '<p class="muted small center pad">No encontré otros torneos con ese nombre. Revisa también la lista de populares.</p>';
     } catch { if (tk === token) res.innerHTML = errorBox('No se pudo buscar (¿sin conexión?).'); }
   };
@@ -359,7 +364,7 @@ function openLeague(lg) {
     <div class="fb-hero" style="--c1:${st.c1};--c2:${st.c2}">
       <div class="fb-hero-av">${leagueBadge(lg, 'xl')}</div>
       <h3>${esc(lg.name)}</h3>
-      <p class="muted small" id="lg-sub">${esc(lg.country || '')}</p>
+      <p class="muted small" id="lg-sub">${isCup(lg.id) ? 'Torneo' : 'Liga'}${lg.country ? ` · ${esc(lg.country)}` : ''}</p>
       <div class="fb-actions">
         <button class="btn sm" data-act="crest">🛡️ Escudo</button>
         <button class="btn sm danger ghost" data-act="del">${ICONS.trash} Quitar</button>
@@ -385,7 +390,7 @@ function openLeague(lg) {
     if (view === 'torneos') {
       const country = popular(lg.id)?.country || lg.country || '';
       const others = POPULAR_LEAGUES.filter((p) => p.id !== lg.id && (p.country === country || p.id.split('.')[0] === lg.id.split('.')[0]));
-      body.innerHTML = `<div class="mh-view">${others.length ? `<p class="muted small">Otros torneos${country ? ` de ${esc(country)}` : ''}:</p><div class="chips wrap">${others.map((l) => {
+      body.innerHTML = `<div class="mh-view">${others.length ? `<p class="muted small">Otras ligas y torneos${country ? ` de ${esc(country)}` : ''}:</p><div class="chips wrap">${others.map((l) => {
         const on = (S.settings.leagues || []).some((x) => x.id === l.id);
         return `<button class="chip ${on ? 'on' : ''}" data-addlg="${esc(l.id)}">${on ? '✓' : '＋'} ${esc(l.name)}</button>`;
       }).join('')}</div>` : '<p class="muted small center pad">No hay otros torneos relacionados en la lista. Búscalos con "Agregar liga o torneo".</p>'}</div>`;
@@ -414,7 +419,7 @@ function openLeague(lg) {
     try {
       const c = await soccerCalendar(lg.id);
       if (!s.open || view !== 'partidos') return;
-      if (c.data.season) $('#lg-sub', s.el).textContent = [lg.country, c.data.season].filter(Boolean).join(' · ');
+      if (c.data.season) $('#lg-sub', s.el).textContent = [isCup(lg.id) ? 'Torneo' : 'Liga', lg.country, phaseEs(c.data.season)].filter(Boolean).join(' · ');
       const today = isoOf(new Date());
       dates = c.data.dates.length ? c.data.dates : Array.from({ length: 15 }, (_, k) => isoOf(addDays(new Date(), k - 7)));
       dayIdx = dates.findIndex((d) => d >= today);
@@ -469,7 +474,8 @@ function openLeague(lg) {
       });
     }
     if (b.dataset.act === 'del') {
-      if (!(await confirmDialog('¿Dejar de seguir esta liga?', `${lg.name} se quitará de tus ligas.`, { ok: 'Quitar liga', danger: true }))) return;
+      const cup = isCup(lg.id);
+      if (!(await confirmDialog(`¿Dejar de seguir ${cup ? 'este torneo' : 'esta liga'}?`, `${lg.name} se quitará de tus torneos.`, { ok: cup ? 'Quitar torneo' : 'Quitar liga', danger: true }))) return;
       await setPref('leagues', (S.settings.leagues || []).filter((l) => l.id !== lg.id));
       toast(`${lg.name} quitada`, { icon: '🗑️' });
       s.close();
