@@ -2,14 +2,14 @@
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
 import { S, TYPES, STATUSES, statusLabel, statusHint, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
-import { ATTRIBUTION, tvmazeSeasons, tvmazeShow, tvmazeFind, wikidataIdFor, wikidataCast, pubStatusEs } from './api.js';
+import { ATTRIBUTION, tvmazeShow, tvmazeFind, wikidataIdFor, wikidataCast, pubStatusEs } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
 import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp } from './sections.js';
 import { renderSports } from './sports.js';
 import { renderDiscover, quickPicks, picksHTML, onPickClick } from './discover.js';
 
 const view = $('#view');
-export const APP_VERSION = '2.3.0';
+export const APP_VERSION = '2.4.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -85,6 +85,17 @@ export async function render({ keepScroll = false } = {}) {
   $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
 }
 window.addEventListener('hashchange', () => render());
+// Tocar la pestaña en la que ya estás te sube al inicio (o vuelve a la pantalla principal de esa pestaña)
+document.querySelector('.tabbar')?.addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-tab]');
+  if (!a) return;
+  const ic = a.querySelector('.ic');
+  ic?.classList.remove('tap'); void ic?.offsetWidth; ic?.classList.add('tap');
+  if (a.classList.contains('active') && location.hash === a.getAttribute('href')) {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
+  }
+});
 
 // ---------- tarjetas ----------
 export function cardHTML(w, i = 0) {
@@ -491,7 +502,7 @@ function openQuickActions(el) {
 onLongPress(document, '.card, .c-item, .spotlight', openQuickActions);
 
 // "Preguntar cada vez": hoja para elegir en qué navegador abrir el link
-setBrowserPicker((url) => {
+setBrowserPicker((url, onOpen) => {
   let host = url;
   try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* */ }
   const s = openSheet(`<h3 class="sheet-title">¿Con qué lo abro?</h3>
@@ -502,7 +513,7 @@ setBrowserPicker((url) => {
     const b = e.target.closest('[data-pick]');
     if (!b) return;
     const k = b.dataset.pick;
-    openUrl(url, { browser: k });
+    openUrl(url, { browser: k, onOpen });
     if ($('#br-rem', s.el).checked) { setPref('browser', k); toast(`Los links se abrirán siempre con ${BROWSERS[k].name}`, { icon: BROWSERS[k].emoji }); }
     s.close();
   });
@@ -552,17 +563,16 @@ export async function doContinue(w, mode = 'next') {
   if (!t) { toast('Esta obra no tiene links guardados.'); return; }
   const u = TYPES[w.type].unitLong;
   // primero se abre el link (iPhone lo exige en el mismo toque) y después se guarda
-  if (mode === 'list' && t.list) {
-    openUrl(t.list);
-  } else if (mode === 'last' && t.last) {
-    openUrl(t.last.url);
-  } else {
-    openUrl(t.list && !t.next ? t.list : t.url);
-  }
-  w.lastOpened = Date.now();
-  saveWork(w, { touch: false });
-  setPendingRead(w, t, mode);
-  toast(`Al volver te pregunto hasta qué ${u} llegaste`, { icon: '📝', timeout: 2500 });
+  // lo que se guarda solo pasa si el link se abrió (con "Preguntar cada vez" puedes cancelar)
+  const onOpen = () => {
+    w.lastOpened = Date.now();
+    saveWork(w, { touch: false });
+    setPendingRead(w, t, mode);
+    toast(`Al volver te pregunto hasta qué ${u} llegaste`, { icon: '📝', timeout: 2500 });
+  };
+  if (mode === 'list' && t.list) openUrl(t.list, { onOpen });
+  else if (mode === 'last' && t.last) openUrl(t.last.url, { onOpen });
+  else openUrl(t.list && !t.next ? t.list : t.url, { onOpen });
 }
 
 // ---------- ¿Hasta dónde leíste? (al volver a la app) ----------
@@ -738,7 +748,6 @@ function starsHTML(rating) {
   return `<div class="stars" role="radiogroup" aria-label="Calificación">${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= rating ? 'on' : ''}" data-star="${n}" role="radio" aria-checked="${n === rating}" aria-label="${n} estrellas">${ICONS.star}</button>`).join('')}</div>`;
 }
 
-const fmtDay = (ts) => new Date(ts).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
 // "hoy, 21:34" · "ayer, 21:34" · "14 oct, 21:34"
 export function fmtWhen(ts) {
   if (!ts) return '';
@@ -1147,7 +1156,7 @@ function drawSeasons(w, root) {
       const isSeen = seen(e.s, e.n), isNext = e.s === cur && e.n === ep + 1;
       const future = e.stamp && new Date(e.stamp).getTime() > now;
       return `<li class="ep-row ${isSeen ? 'seen' : ''} ${isNext ? 'next' : ''} ${future ? 'future' : ''}">
-        <div class="ep-img">${e.image ? `<img src="${esc(e.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<span>E${e.n}</span></div>
+        <div class="ep-img">${e.image ? `<img src="${esc(e.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()">` : ''}<span>E${e.n}</span></div>
         <div class="ep-text">
           <b>${e.n}. ${esc(e.name || `Episodio ${e.n}`)}</b>
           <small>${future ? `Sale el ${fmtD(e.date)}` : fmtD(e.date)}${e.runtime ? ` · ${e.runtime} min` : ''}${isNext ? ' · <em>el que sigue</em>' : ''}</small>
@@ -1210,7 +1219,7 @@ async function loadCast(w, root) {
 function drawCast(root, cast = [], directors = []) {
   const panel = $('#cast-panel', root);
   if (!panel || (!cast.length && !directors.length)) return;
-  const person = (p) => `<li><span class="cast-img">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<i>${esc(p.name.split(' ').map((x) => x[0]).slice(0, 2).join(''))}</i></span><b>${esc(p.name)}</b>${p.role ? `<small>${esc(p.role)}</small>` : ''}</li>`;
+  const person = (p) => `<li><span class="cast-img">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()">` : ''}<i>${esc(p.name.split(' ').map((x) => x[0]).slice(0, 2).join(''))}</i></span><b>${esc(p.name)}</b>${p.role ? `<small>${esc(p.role)}</small>` : ''}</li>`;
   panel.hidden = false;
   panel.innerHTML = `<div class="sec-head"><h3>🎭 Reparto</h3>${directors.length ? `<span class="muted small">Dirección: ${esc(directors.map((d) => d.name).join(', '))}</span>` : ''}</div>
     <ul class="cast-row">${cast.map(person).join('')}</ul>`;

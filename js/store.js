@@ -318,18 +318,20 @@ export function browserHref(url, k) {
 }
 let pickBrowser = null; // lo registra la interfaz: hoja para elegir navegador
 export function setBrowserPicker(fn) { pickBrowser = fn; }
-export function openUrl(url, { browser } = {}) {
+// onOpen se llama cuando el link de verdad se abre (con "Preguntar cada vez", después de elegir)
+export function openUrl(url, { browser, onOpen } = {}) {
   const k = browser || S.settings.browser || 'system';
-  if (!/^https?:\/\//i.test(url)) return tapLink(url, true);
-  if (k === 'ask' && pickBrowser) return pickBrowser(url);
+  if (!/^https?:\/\//i.test(url)) { tapLink(url, true); onOpen?.(); return; }
+  if (k === 'ask' && pickBrowser) { pickBrowser(url, onOpen); return; }
   if (k === 'app') {
     // misma ventana: se espera un instante para que se guarde el avance antes de salir
+    onOpen?.();
     setTimeout(() => location.assign(url), 350);
     return;
   }
   const href = browserHref(url, k);
-  if (href) return tapLink(href, false);
-  tapLink(url, true);
+  if (href) tapLink(href, false); else tapLink(url, true);
+  onOpen?.();
 }
 
 // Aplica un link analizado a una obra existente (actualiza progreso en vez de duplicar)

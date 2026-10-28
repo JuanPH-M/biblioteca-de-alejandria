@@ -1,8 +1,8 @@
 // Secciones: plataformas, fútbol, estadísticas, ajustes (respaldo) e importación de marcadores.
-import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, readFile, download, relTime, hueOf, initials, coverHTML, vibrate } from './ui.js';
+import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, readFile, download, relTime, coverHTML, vibrate } from './ui.js';
 import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed, BROWSERS, browserChoices, openUrl, IS_IOS, IS_ANDROID, IS_STANDALONE } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
-import { ATTRIBUTION, searchInfo } from './api.js';
+import { searchInfo } from './api.js';
 import { db } from './db.js';
 import { cardHTML, render, go, applyTheme, promptInstall, APP_VERSION } from './app.js';
 

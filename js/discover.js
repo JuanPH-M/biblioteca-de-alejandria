@@ -53,7 +53,7 @@ function cardHTML(r, kind, i = 0, because = '') {
   items.set(keyOf(r), { r, kind });
   const have = inLibrary(r);
   return `<button class="dcard" data-key="${esc(keyOf(r))}" style="--i:${Math.min(i, 12)}">
-    <span class="dcover">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<i>${esc(r.title.slice(0, 2).toUpperCase())}</i>
+    <span class="dcover">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()">` : ''}<i>${esc(r.title.slice(0, 2).toUpperCase())}</i>
       ${have ? '<span class="dhave">✓ La tienes</span>' : r.score ? `<span class="dscore">★ ${(r.score / 10).toFixed(1)}</span>` : ''}</span>
     <b>${esc(r.title)}</b>
     <small>${esc(because ? `Porque te gustó ${because}` : [r.year, r.genres?.[0] || (r.extra || '').split(' · ')[0]].filter(Boolean).join(' · '))}</small>

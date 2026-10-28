@@ -1,6 +1,6 @@
 // Fútbol (dentro de Deportes) con datos públicos de ESPN: clubes y selecciones, ligas con calendario y tabla completos,
 // y cada partido con goles, tarjetas, cambios, alineaciones y estadísticas.
-import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, relTime, hueOf, vibrate, imageToDataURL } from './ui.js';
+import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, hueOf, vibrate, imageToDataURL } from './ui.js';
 import { S, setPref, openUrl } from './store.js';
 import { ATTRIBUTION, POPULAR_LEAGUES, LEGACY_LEAGUES, isCup, soccerSearchTeams, soccerSearchLeagues, soccerTeamSchedule, soccerCalendar, soccerSummary, posEs, sportDay, sportStandings } from './api.js';
 import { avatar, gameCard, statusEs, centerIn, dayLabel, addDays, cap, fmtDay, fmtLong, ytSearch, loading, errorBox, updated, tickCountdowns } from './sports.js';

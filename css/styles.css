@@ -1514,3 +1514,16 @@ input[type="search"]::-ms-clear { display: none; }
 .ep-sum.open { -webkit-line-clamp: unset; }
 .ep-sum[hidden] { display: none; }
 .cast-panel > .sec-head { flex-wrap: wrap; }
+
+/* ===================== v2.4 ===================== */
+/* Toques más rápidos en el teléfono (sin la espera del doble toque para hacer zoom) */
+a, button, input, select, textarea, label, summary, [role="button"], [role="link"] { touch-action: manipulation; }
+/* Las imágenes aparecen con un fundido suave al cargar */
+.dcover img, .ep-img img, .cast-img img { opacity: 0; transition: opacity .35s ease; }
+.dcover img.ok, .ep-img img.ok, .cast-img img.ok { opacity: 1; }
+/* Carruseles: el deslizamiento horizontal no arrastra la página */
+.drow, .carousel, .season-chips, .cast-row, .day-strip, .sport-switch, .chips.scroll-x { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+/* Pestañas: pequeño rebote al tocarlas */
+.tabbar a .ic.tap { animation: tabTap .45s var(--spring); }
+@keyframes tabTap { 40% { transform: translateY(-4px) scale(1.18); } }
+[data-motion="off"] .tabbar a .ic.tap { animation: none; }

@@ -3,7 +3,7 @@ import { $, $$, esc, openSheet, whenSettled, toast, debounce, imageToDataURL, IC
 import { S, TYPES, STATUSES, TRACK_ONLY, needsLink, statusLabel, statusHint, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel, trimLinks } from './store.js';
 import { PLATFORMS, STREAMING, parseLink, nextChapterUrl, KNOWN_SITES } from './links.js';
 import { searchInfo, ATTRIBUTION, tvmazeSeasons } from './api.js';
-import { render, go, openCheckIn, openLinkFirst } from './app.js';
+import { render, go, openLinkFirst } from './app.js';
 
 // ---------- análisis visual de un link ----------
 // Devuelve HTML que explica qué se reconoció y permite elegir el número de capítulo.
