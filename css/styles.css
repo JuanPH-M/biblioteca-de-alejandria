@@ -1106,7 +1106,7 @@ input:disabled { opacity: .55; }
 .ptile:hover .pstack span, .ptile:active .pstack span { transform: rotate(calc(var(--k) * -14deg)) translateX(calc(var(--k) * -4px)); }
 .sbar { display: flex; gap: 2px; height: 6px; border-radius: 6px; overflow: hidden; background: rgba(0, 0, 0, .25); margin-top: 8px; }
 .sbar i { display: block; height: 100%; background: var(--c); animation: growW .8s var(--ease) both; }
-.sbar.empty { opacity: .4; }
+.sbar.is-none { opacity: .4; }
 
 .plat-hero2 { position: relative; overflow: hidden; margin: 0 16px 14px; padding: 18px; border-radius: 24px; border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   background: linear-gradient(140deg, color-mix(in srgb, var(--c) 45%, var(--surface-solid)), var(--surface-solid) 80%); animation: cardIn .5s var(--ease) both; }
@@ -1527,3 +1527,75 @@ a, button, input, select, textarea, label, summary, [role="button"], [role="link
 .tabbar a .ic.tap { animation: tabTap .45s var(--spring); }
 @keyframes tabTap { 40% { transform: translateY(-4px) scale(1.18); } }
 [data-motion="off"] .tabbar a .ic.tap { animation: none; }
+
+/* ===================== v2.5 ===================== */
+/* Logo del inicio: lleva al inicio */
+.brand-logo { display: grid; flex: none; border-radius: 12px; transition: transform .25s var(--spring); }
+.brand-logo:active { transform: scale(.88); }
+.brand-logo.spin img { animation: logoSpin .7s var(--spring); }
+@keyframes logoSpin { 40% { transform: rotate(-12deg) scale(1.15); } 70% { transform: rotate(6deg) scale(.96); } }
+
+/* Buscar desde cualquier pantalla */
+.ss-res { display: grid; gap: 2px; margin-top: 8px; }
+.ss-label { font-size: 12px; font-weight: 700; color: var(--muted); margin: 6px 4px 4px; text-transform: uppercase; letter-spacing: .4px; }
+.ss-res .btn { margin-top: 10px; }
+
+/* Tarjeta destacada: motivo con color */
+.sp-kicker.stale { color: #fbbf24; }
+.sp-kicker.pending { color: #67e8f9; }
+.sp-kicker.fav { color: #fda4af; }
+
+/* Plataformas por secciones */
+.plat-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 18px 16px 10px; }
+.plat-sec-head h2 { font-size: 18px; font-weight: 800; }
+.ptile { min-height: 168px; height: 100%; }
+.plat-grid2 { grid-auto-rows: minmax(168px, auto); align-self: start; flex: none; height: auto; }
+
+/* Fútbol: cuatro pestañas con ícono arriba */
+.tabs2.four { grid-template-columns: repeat(4, 1fr); }
+.tabs2.four .tabs2-pill { width: calc(25% - 2px); }
+.tabs2.stacked button { display: grid; justify-items: center; gap: 1px; padding: 8px 2px; font-size: 12px; position: relative; }
+.tabs2.stacked .t-ic { font-size: 18px; line-height: 1; transition: transform .35s var(--spring); }
+.tabs2.stacked button.on .t-ic { transform: scale(1.15) translateY(-1px); }
+.tabs2.stacked em { position: absolute; top: 3px; right: 6px; margin: 0; padding: 0 5px; min-width: 16px; font-size: 10px; line-height: 16px; border-radius: 99px; background: rgba(0, 0, 0, .35); }
+.tabs2.stacked em[hidden] { display: none; }
+
+/* Fútbol: tu próximo partido */
+.fb-hero-match { display: grid; gap: 10px; width: calc(100% - 32px); margin: 0 16px 14px; padding: 16px; border-radius: 22px; text-align: center; color: var(--text); border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent);
+  background: radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--sc) 30%, transparent), transparent 70%), var(--surface-solid); box-shadow: 0 18px 40px -24px var(--sc); animation: cardIn .5s var(--ease) both; transition: transform .2s var(--spring); }
+.fb-hero-match:active { transform: scale(.98); }
+.fb-hero-match.is-live { border-color: rgba(239, 68, 68, .6); }
+.fhm-kicker { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); display: inline-flex; justify-content: center; align-items: center; gap: 6px; }
+.fhm-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.fhm-team { display: grid; justify-items: center; gap: 6px; min-width: 0; }
+.fhm-team b { font-size: 13.5px; overflow-wrap: anywhere; }
+.fhm-mid { display: grid; justify-items: center; gap: 4px; }
+.fhm-vs { font-size: 22px; font-weight: 900; letter-spacing: 1px; color: var(--sc); text-shadow: 0 0 18px color-mix(in srgb, var(--sc) 60%, transparent); }
+.fhm-score { font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.fhm-mid small { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fhm-date { font-size: 12px; color: var(--muted); }
+
+/* Fútbol: recuadros con los colores de cada equipo */
+.team-tile { background: linear-gradient(160deg, color-mix(in srgb, var(--tc1) 34%, var(--surface-solid)), var(--surface-solid) 75%); border-color: color-mix(in srgb, var(--tc1) 40%, var(--border)); }
+.team-tile::before { background: var(--tc1); opacity: .3; }
+.team-tile::after { content: ""; position: absolute; inset: auto 0 0 0; height: 3px; background: linear-gradient(90deg, var(--tc1), var(--tc2)); }
+.lg-kind { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; padding: 2px 8px; border-radius: 99px; background: rgba(0, 0, 0, .3); color: color-mix(in srgb, var(--text) 80%, transparent); margin-top: 6px; }
+.lg-tile b { margin-top: 2px; }
+.fb-sec { display: flex; align-items: center; gap: 6px; }
+.fb-tile .team-av, .fb-tile .lg-badge { transition: transform .35s var(--spring); }
+.fb-tile:hover .team-av, .fb-tile:hover .lg-badge { transform: translateY(-3px) scale(1.05); }
+
+/* Pulido general: paneles, encabezados y transiciones más suaves */
+.panel { box-shadow: 0 12px 30px -24px rgba(0, 0, 0, .9); transition: border-color .3s, transform .3s var(--spring); }
+.sec-head h2, .sec-head h3 { letter-spacing: -.2px; }
+.icon-btn { transition: transform .2s var(--spring), background .2s, color .2s; }
+.icon-btn:active { transform: scale(.88); }
+.chip { transition: transform .2s var(--spring), background .25s, color .25s, border-color .25s; }
+.chip:active { transform: scale(.94); }
+.card { transition: transform .25s var(--spring), box-shadow .3s; }
+.card:active { transform: scale(.97); }
+@media (hover: hover) {
+  .card:hover { transform: translateY(-3px); box-shadow: 0 18px 34px -20px rgba(0, 0, 0, .9); }
+  .ptile:hover, .fb-tile:hover, .dcard:hover { transform: translateY(-3px); }
+}
+[data-motion="off"] .card:hover, [data-motion="off"] .ptile:hover, [data-motion="off"] .fb-tile:hover { transform: none; }

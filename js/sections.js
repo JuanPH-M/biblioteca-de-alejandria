@@ -1,5 +1,5 @@
 // Secciones: plataformas, fútbol, estadísticas, ajustes (respaldo) e importación de marcadores.
-import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, readFile, download, relTime, coverHTML, vibrate } from './ui.js';
+import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, readFile, download, relTime, coverHTML, vibrate, hueOf } from './ui.js';
 import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed, BROWSERS, browserChoices, openUrl, IS_IOS, IS_ANDROID, IS_STANDALONE } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
 import { searchInfo } from './api.js';
@@ -14,61 +14,83 @@ const backHeader = (title, sub = '', back = '#/') => `
 const pageHeader = (title, sub = '') => `
   <header class="topbar">
     <div class="grow"><h1 class="page-title big">${title}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div>
+    <button class="icon-btn" data-global-search aria-label="Buscar en tu biblioteca">${ICONS.search}</button>
     <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
   </header>`;
 
 // ======================= PLATAFORMAS =======================
 const NONE_KEY = 'ninguna';
+const SITE = 'sitio:';
+// Nombre bonito de un sitio de lectura: "olympusxyz.com" → "Olympus"
+const SITE_NAMES = { olympus: 'Olympus', mhscans: 'MHScans', leercapitulo: 'LeerCapítulo', manhwaweb: 'ManhwaWeb', tmo: 'TMO', lectortmo: 'LectorTMO', zonatmo: 'ZonaTMO', inmanga: 'InManga', mangadex: 'MangaDex', webtoons: 'Webtoon', tapas: 'Tapas' };
+export function siteName(host = '') {
+  const base = host.replace(/^www\./, '').split('.').slice(-2, -1)[0] || host;
+  const known = Object.entries(SITE_NAMES).find(([k]) => base.toLowerCase().startsWith(k));
+  return known ? known[1] : base.charAt(0).toUpperCase() + base.slice(1);
+}
+const hostOf = (w) => { const l = (w.links || []).find((x) => x.platform === 'web'); return l ? (l.host || '').replace(/^www\./, '') : ''; };
 function platformWorks(key) {
   if (key === NONE_KEY) return S.works.filter((w) => TRACK_ONLY.includes(w.type) && !platformsOf(w).length);
+  if (key.startsWith(SITE)) { const h = key.slice(SITE.length); return S.works.filter((w) => hostOf(w) === h); }
   return S.works.filter((w) => platformsOf(w).includes(key));
 }
-const PLAT_DESC = { netflix: 'Series y películas', prime: 'Series y películas', disney: 'Series y películas', hbo: 'Series y películas', youtube: 'Videos y series', crunchyroll: 'Anime', web: 'Manhwas y mangas', [NONE_KEY]: 'Series y películas sin elegir' };
+const STREAM_DESC = 'Series y películas';
+const PLAT_DESC = { youtube: 'Videos y series', crunchyroll: 'Anime', vix: 'Series, novelas y películas', pluto: 'Canales gratis', mubi: 'Cine de autor', [NONE_KEY]: 'Series y películas sin elegir' };
+const descOf = (k) => PLAT_DESC[k] || STREAM_DESC;
+const siteColor = (h) => `hsl(${hueOf(h)} 65% 45%)`;
+// Sitios de lectura que usas, con cuántas obras tienes en cada uno
+function readingSites() {
+  const c = new Map();
+  S.works.forEach((w) => { const h = hostOf(w); if (h) c.set(h, (c.get(h) || 0) + 1); });
+  return [...c.entries()].sort((x, y) => y[1] - x[1]).map(([h]) => h);
+}
 
 function statusBar(list) {
-  if (!list.length) return '<div class="sbar empty"></div>';
+  if (!list.length) return '<div class="sbar is-none"></div>';
   return `<div class="sbar">${Object.entries(STATUSES).map(([k, st]) => { const n = list.filter((w) => w.status === k).length; return n ? `<i style="--c:${st.color};flex:${n}" title="${st.label}: ${n}"></i>` : ''; }).join('')}</div>`;
 }
 function coverStack(list) {
   const withCover = [...list].sort((a, b) => (b.lastOpened || b.updatedAt) - (a.lastOpened || a.updatedAt)).slice(0, 3);
   return `<div class="pstack">${withCover.map((w, i) => `<span style="--k:${i}">${coverHTML(w)}</span>`).join('')}</div>`;
 }
+function tileHTML(href, name, color, list, desc, icon, i) {
+  const going = list.filter((w) => ['viendo', 'emision'].includes(w.status)).length;
+  return `<a href="${href}" class="ptile ${list.length ? '' : 'is-empty'}" style="--c:${color};--i:${i}">
+    <div class="ptile-top"><span class="plat-glyph">${icon}</span>${list.length ? coverStack(list) : ''}</div>
+    <b class="ptile-name">${esc(name)}</b>
+    <small class="ptile-desc">${list.length ? `${list.length} ${list.length === 1 ? 'obra' : 'obras'}${going ? ` · ${going} en curso` : ''}` : esc(desc)}</small>
+    ${statusBar(list)}
+  </a>`;
+}
 
 export function renderPlatforms(root) {
-  const keys = [...STREAMING, 'web'];
   const none = platformWorks(NONE_KEY);
-  const used = keys.filter((k) => platformWorks(k).length);
-  const inPlat = new Set(keys.flatMap((k) => platformWorks(k).map((w) => w.id)));
-  const active = [...inPlat].map(getWorkById).filter((w) => w && ['viendo', 'emision'].includes(w.status)).length;
-  const sorted = [...keys].sort((a, b) => platformWorks(b).length - platformWorks(a).length);
-  root.innerHTML = `${pageHeader('📺 Plataformas', 'Dónde ves y lees cada cosa')}
+  const sites = readingSites();
+  const streamUsed = STREAMING.filter((k) => platformWorks(k).length);
+  const inStream = new Set(STREAMING.flatMap((k) => platformWorks(k).map((w) => w.id)));
+  const reading = S.works.filter((w) => hostOf(w));
+  const sorted = [...STREAMING].sort((a, b) => platformWorks(b).length - platformWorks(a).length);
+  root.innerHTML = `${pageHeader('📺 Plataformas', 'Dónde ves y dónde lees cada cosa')}
   <section class="plat-summary">
-    <div><b data-count="${inPlat.size}">${inPlat.size}</b><small>obras con plataforma</small></div>
-    <div><b data-count="${used.length}">${used.length}</b><small>plataformas en uso</small></div>
-    <div><b data-count="${active}">${active}</b><small>en curso</small></div>
+    <div><b data-count="${inStream.size}">${inStream.size}</b><small>series, películas y animes</small></div>
+    <div><b data-count="${streamUsed.length}">${streamUsed.length}</b><small>plataformas en uso</small></div>
+    <div><b data-count="${reading.length}">${reading.length}</b><small>obras en páginas de lectura</small></div>
   </section>
   ${none.length ? `<a href="#/plataforma/${NONE_KEY}" class="banner warn plat-none"><span>🤔 ${none.length} ${none.length === 1 ? 'serie o película no tiene' : 'series o películas no tienen'} plataforma. Tócalo para elegirla.</span><b>›</b></a>` : ''}
-  <div class="plat-grid2">
-    ${sorted.filter((k) => platformWorks(k).length).map((k, i) => {
-      const p = PLATFORMS[k], list = platformWorks(k);
-      const going = list.filter((w) => ['viendo', 'emision'].includes(w.status)).length;
-      return `<a href="#/plataforma/${k}" class="ptile ${list.length ? '' : 'is-empty'}" style="--c:${p.color};--i:${i}">
-        <div class="ptile-top"><span class="plat-glyph">${k === 'web' ? ICONS.book : ICONS.play}</span>${list.length ? coverStack(list) : ''}</div>
-        <b class="ptile-name">${esc(p.name)}</b>
-        <small class="ptile-desc">${list.length ? `${list.length} ${list.length === 1 ? 'obra' : 'obras'}${going ? ` · ${going} en curso` : ''}` : PLAT_DESC[k]}</small>
-        ${statusBar(list)}
-      </a>`;
-    }).join('')}
-  </div>
-  ${sorted.some((k) => !platformWorks(k).length) ? `<h3 class="plat-sub">Sin usar todavía</h3>
-  <div class="plat-minis">${sorted.filter((k) => !platformWorks(k).length).map((k, i) => `<a href="#/plataforma/${k}" class="ptile-mini" style="--c:${PLATFORMS[k].color};--i:${i}"><span class="plat-glyph">${k === 'web' ? ICONS.book : ICONS.play}</span><span><b>${esc(PLATFORMS[k].name)}</b><small>${PLAT_DESC[k]}</small></span></a>`).join('')}</div>` : ''}
-  <p class="muted small center pad">Toca una plataforma para ver todo lo que tienes ahí. En series y películas la plataforma se elige dentro de cada obra.</p>`;
+  <div class="plat-sec-head"><h2>📺 Dónde ves</h2><span class="muted small">Streaming</span></div>
+  <div class="plat-grid2">${sorted.map((k, i) => tileHTML(`#/plataforma/${k}`, PLATFORMS[k].name, PLATFORMS[k].color, platformWorks(k), descOf(k), ICONS.play, i)).join('')}</div>
+  <div class="plat-sec-head"><h2>📖 Dónde lees</h2><span class="muted small">Páginas de manhwa y manga</span></div>
+  ${sites.length ? `<div class="plat-grid2">${sites.map((h, i) => tileHTML(`#/plataforma/${SITE}${encodeURIComponent(h)}`, siteName(h), siteColor(h), platformWorks(SITE + h), h, ICONS.book, i)).join('')}</div>`
+    : '<p class="muted small pad">Cuando guardes el link de un manhwa o manga, la página donde lees aparecerá aquí.</p>'}
+  <p class="muted small center pad">Toca una plataforma o una página para ver todo lo que tienes ahí. En series y películas la plataforma se elige dentro de cada obra.</p>`;
   animateCounts(root);
 }
 
 export function renderPlatform(root, key) {
+  key = decodeURIComponent(key || '');
   const isNone = key === NONE_KEY;
-  const p = isNone ? { name: 'Sin plataforma', color: '#64748b' } : (PLATFORMS[key] || PLATFORMS.web);
+  const isSite = key.startsWith(SITE);
+  const p = isNone ? { name: 'Sin plataforma', color: '#64748b' } : isSite ? { name: siteName(key.slice(SITE.length)), color: siteColor(key.slice(SITE.length)) } : (PLATFORMS[key] || PLATFORMS.web);
   const list = platformWorks(key).sort((a, b) => b.updatedAt - a.updatedAt);
   const going = list.filter((w) => ['viendo', 'emision'].includes(w.status));
   const done = list.filter((w) => w.status === 'terminado').length;
@@ -77,12 +99,12 @@ export function renderPlatform(root, key) {
   root.innerHTML = `${backHeader(esc(p.name), `${list.length} ${list.length === 1 ? 'obra' : 'obras'}`, '#/plataformas')}
   <section class="plat-hero2" style="--c:${p.color}">
     <div class="ph-glow"></div>
-    <div class="ph-row"><span class="plat-glyph big">${isNone ? '🤔' : key === 'web' ? ICONS.book : ICONS.play}</span><div><h2>${esc(p.name)}</h2><small>${PLAT_DESC[key] || ''}</small></div></div>
+    <div class="ph-row"><span class="plat-glyph big">${isNone ? '🤔' : (key === 'web' || isSite) ? ICONS.book : ICONS.play}</span><div><h2>${esc(p.name)}</h2><small>${isSite ? esc(key.slice(SITE.length)) : isNone ? PLAT_DESC[key] : descOf(key)}</small></div></div>
     <div class="ph-stats">
       <div><b data-count="${list.length}">${list.length}</b><small>obras</small></div>
       <div><b data-count="${going.length}">${going.length}</b><small>en curso</small></div>
       <div><b data-count="${done}">${done}</b><small>terminadas</small></div>
-      <div><b data-count="${progressSum}">${progressSum}</b><small>${key === 'web' ? 'capítulos' : 'cap./ep.'}</small></div>
+      <div><b data-count="${progressSum}">${progressSum}</b><small>${(key === 'web' || isSite) ? 'capítulos' : 'cap./ep.'}</small></div>
     </div>
     ${statusBar(list)}
   </section>
@@ -94,7 +116,7 @@ export function renderPlatform(root, key) {
       ${Object.entries(STATUSES).map(([k, st]) => { const n = list.filter((w) => w.status === k).length; return n ? `<button class="chip" data-pf="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, list[0].type)} <em>${n}</em></button>` : ''; }).join('')}
     </div>
     <div class="grid" id="pf-grid"></div>`
-    : `<div class="empty small"><div class="empty-art"><span>${isNone ? '🎉' : '📭'}</span></div><h3>${isNone ? 'Todas tus series y películas tienen plataforma' : `Nada en ${esc(p.name)} todavía`}</h3><p class="muted">${isNone ? '' : key === 'web' ? 'Agrega el link de donde lees un manhwa o manga y aparecerá aquí.' : `Elige ${esc(p.name)} en "Dónde la veo" al agregar una serie o película.`}</p>${isNone ? '' : '<button class="btn primary" id="pf-add">＋ Agregar</button>'}</div>`}`;
+    : `<div class="empty small"><div class="empty-art"><span>${isNone ? '🎉' : '📭'}</span></div><h3>${isNone ? 'Todas tus series y películas tienen plataforma' : `Nada en ${esc(p.name)} todavía`}</h3><p class="muted">${isNone ? '' : (key === 'web' || isSite) ? 'Agrega el link de donde lees un manhwa o manga y aparecerá aquí.' : `Elige ${esc(p.name)} en "Dónde la veo" al agregar una serie o película.`}</p>${isNone ? '' : '<button class="btn primary" id="pf-add">＋ Agregar</button>'}</div>`}`;
   const draw = () => {
     const g = $('#pf-grid', root);
     if (!g) return;
@@ -124,7 +146,6 @@ function animateCounts(root) {
     requestAnimationFrame(step);
   });
 }
-const getWorkById = (id) => S.works.find((w) => w.id === id);
 
 // ======================= ESTADÍSTICAS =======================
 export function todayCount() {

@@ -379,8 +379,11 @@ export const POPULAR_LEAGUES = [
   { id: 'eng.fa', name: 'FA Cup', country: 'Inglaterra', flag: '🏴', c1: '#1e3a8a', c2: '#f87171' },
   { id: 'esp.copa_del_rey', name: 'Copa del Rey', country: 'España', flag: '🇪🇸', c1: '#7c2d12', c2: '#fde047' },
 ];
-// Liga (todos contra todos por temporada) o torneo (copas y competencias internacionales por fases)
-export const isCup = (slug = '') => /^(uefa|conmebol|fifa|concacaf|caf|afc|club)\.|copa|cup|\.fa$|pokal|coppa|coupe|taca|super|friendly/i.test(slug);
+// Torneo = competencia internacional (Champions, Libertadores, Mundial…).
+// Las ligas de cada país y sus copas (Copa Colombia, FA Cup…) van juntas en "Ligas".
+export const isIntl = (slug = '') => /^(uefa|conmebol|fifa|concacaf|caf|afc|club)\./i.test(slug);
+export const isCup = (slug = '') => !isIntl(slug) && /copa|cup|\.fa$|pokal|coppa|coupe|taca|super|friendly/i.test(slug);
+export const compKind = (slug = '') => (isIntl(slug) ? 'Torneo internacional' : isCup(slug) ? 'Copa' : 'Liga');
 // IDs de la versión anterior (TheSportsDB) → código de ESPN
 export const LEGACY_LEAGUES = {
   4480: 'uefa.champions', 4328: 'eng.1', 4335: 'esp.1', 4332: 'ita.1', 4331: 'ger.1', 4334: 'fra.1', 4497: 'col.1', 4951: 'col.2', 5183: 'col.copa',

@@ -9,9 +9,14 @@ export const PLATFORMS = {
   hbo: { name: 'HBO Max', color: '#8b5cf6', glyph: '▶', hosts: ['hbomax.com', 'max.com', 'play.max.com'] },
   youtube: { name: 'YouTube', color: '#ef4444', glyph: '▶', hosts: ['youtube.com', 'youtu.be'] },
   crunchyroll: { name: 'Crunchyroll', color: '#f97316', glyph: '▶', hosts: ['crunchyroll.com'] },
+  apple: { name: 'Apple TV+', color: '#94a3b8', glyph: '▶', hosts: ['tv.apple.com'] },
+  paramount: { name: 'Paramount+', color: '#2563eb', glyph: '▶', hosts: ['paramountplus.com'] },
+  vix: { name: 'ViX', color: '#f59e0b', glyph: '▶', hosts: ['vix.com'] },
+  pluto: { name: 'Pluto TV', color: '#facc15', glyph: '▶', hosts: ['pluto.tv'] },
+  mubi: { name: 'MUBI', color: '#0f766e', glyph: '▶', hosts: ['mubi.com'] },
   web: { name: 'Página web', color: '#14b8a6', glyph: '📖', hosts: [] },
 };
-export const STREAMING = ['netflix', 'prime', 'disney', 'hbo', 'youtube', 'crunchyroll'];
+export const STREAMING = ['netflix', 'prime', 'disney', 'hbo', 'apple', 'paramount', 'crunchyroll', 'youtube', 'vix', 'pluto', 'mubi'];
 
 export function detectPlatform(host, href = '') {
   host = host.replace(/^www\./, '');

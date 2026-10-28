@@ -9,7 +9,7 @@ import { renderSports } from './sports.js';
 import { renderDiscover, quickPicks, picksHTML, onPickClick } from './discover.js';
 
 const view = $('#view');
-export const APP_VERSION = '2.4.0';
+export const APP_VERSION = '2.5.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -85,6 +85,7 @@ export async function render({ keepScroll = false } = {}) {
   $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
 }
 window.addEventListener('hashchange', () => render());
+document.addEventListener('click', (e) => { if (e.target.closest('[data-global-search]')) openSearchSheet(); });
 // Tocar la pestaña en la que ya estás te sube al inicio (o vuelve a la pantalla principal de esa pestaña)
 document.querySelector('.tabbar')?.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-tab]');
@@ -133,8 +134,10 @@ function finishPrompt(w) {
 }
 
 // ---------- biblioteca ----------
+// Última vez que avanzaste o abriste el link (si nunca, la última edición)
+const lastTouch = (w) => Math.max(w.lastRead || 0, w.lastOpened || 0) || w.updatedAt || 0;
 function continueList() {
-  return S.works.filter((w) => ['viendo', 'emision'].includes(w.status)).sort((a, b) => (b.lastOpened || b.updatedAt) - (a.lastOpened || a.updatedAt)).slice(0, 12);
+  return S.works.filter((w) => ['viendo', 'emision'].includes(w.status)).sort((a, b) => lastTouch(b) - lastTouch(a)).slice(0, 12);
 }
 
 let greeted = false;
@@ -148,15 +151,16 @@ async function renderHome(root) {
   const backupDays = S.settings.lastBackup ? Math.floor((Date.now() - S.settings.lastBackup) / 864e5) : null;
   const showBackup = total >= 3 && (backupDays == null || backupDays > 14) && !(S.settings.backupSnooze > Date.now());
   const cont = continueList();
-  const [spot, ...rest] = cont;
-  const spotPool = cont.slice(0, 5);
+  const [, ...rest] = cont;
+  const spotPool = spotlightPool(cont);
+  const spot = spotPool[0];
   const h = new Date().getHours();
   const hello = h < 5 ? 'Buenas noches' : h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
   const today = todayCount();
   root.innerHTML = `
   <header class="topbar">
     <div class="brand">
-      <img src="icons/icon.svg" alt="" width="38" height="38">
+      <a href="#/" class="brand-logo" id="brand-logo" aria-label="Ir al inicio"><img src="icons/icon.svg" alt="" width="38" height="38"></a>
       <div class="brand-text"><h1 class="brand-title ${greeted ? '' : 'greeting'}" id="brand-title">${greeted ? 'Biblioteca de Alejandría' : `${hello} <span class="wave">👋</span>`}</h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}</p><p class="clock" id="clock">${clockText()}</p></div>
     </div>
     <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
@@ -172,7 +176,7 @@ async function renderHome(root) {
     </div>
     <div class="suggest" id="suggest" role="listbox" hidden></div>
   </div>
-  ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="tablist" aria-label="Obras en curso">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${i}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}</div>` : ''}</div>` : ''}
+  ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="tablist" aria-label="Obras destacadas">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${i}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}</div>` : ''}</div>` : ''}
   ${!f.q ? `<div class="pick-row ${total >= 2 ? '' : 'solo'}">
     ${total >= 2 ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>La suerte elige qué seguir</small></span></button>` : ''}
     <a class="next-pick disc" href="#/descubrir"><span class="dice">✨</span><span><b>Descubrir</b><small>Recomendaciones nuevas y clásicas</small></span></a>
@@ -288,6 +292,18 @@ async function renderHome(root) {
   root.addEventListener('click', onCardClick);
   if (spot && !f.q) startSpotRotation(root, spotPool);
   $('#next-pick', root)?.addEventListener('click', openRoulette);
+  // el logo vuelve al inicio: limpia la búsqueda y sube
+  $('#brand-logo', root)?.addEventListener('click', (e) => {
+    e.preventDefault();
+    vibrate(8);
+    const logo = e.currentTarget;
+    logo.classList.remove('spin'); void logo.offsetWidth; logo.classList.add('spin');
+    if (S.filters.q || S.filters.type !== 'all' || S.filters.status !== 'all' || S.filters.platform !== 'all' || S.filters.fav) {
+      Object.assign(S.filters, { q: '', type: 'all', status: 'all', platform: 'all', fav: false });
+      render();
+    }
+    window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
+  });
   // recomendaciones en el inicio
   const fy = $('#for-you', root);
   if (fy) {
@@ -368,6 +384,32 @@ function startSpotRotation(root, pool) {
 }
 
 // Tarjeta grande con la obra que estás siguiendo
+// Qué se muestra en la tarjeta destacada: lo último que sigues, lo que llevas tiempo sin abrir,
+// algún pendiente y alguna favorita (cada una con su motivo)
+function spotlightPool(cont) {
+  const out = [], seen = new Set();
+  const add = (w, why) => { if (w && !seen.has(w.id)) { seen.add(w.id); out.push({ ...w, _why: why }); } };
+  const DAY = 864e5;
+  cont.filter((w) => Date.now() - lastTouch(w) <= 5 * DAY).slice(0, 2).forEach((w) => add(w, 'recent'));
+  S.works.filter((w) => ['viendo', 'emision', 'pausado'].includes(w.status) && Date.now() - lastTouch(w) > 5 * DAY)
+    .sort((a, b) => lastTouch(a) - lastTouch(b)).slice(0, 2).forEach((w) => add(w, 'stale'));
+  const pend = S.works.filter((w) => w.status === 'pendiente').sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  add(pend[0], 'pending');
+  add(S.works.filter((w) => w.favorite && !['terminado', 'abandonado'].includes(w.status)).sort((a, b) => lastTouch(a) - lastTouch(b))[0], 'fav');
+  cont.slice(2).forEach((w) => { if (out.length < 6) add(w, 'recent'); });
+  return out.slice(0, 6);
+}
+function spotKicker(w) {
+  const r = TYPES[w.type].reading;
+  if (w._why === 'stale') {
+    const d = Math.floor((Date.now() - lastTouch(w)) / 864e5);
+    return `⏳ Llevas ${d} ${d === 1 ? 'día' : 'días'} sin ${r ? 'leerla' : 'verla'}`;
+  }
+  if (w._why === 'pending') return `📌 Pendiente · ¿${r ? 'la empiezas' : 'la ves'} hoy?`;
+  if (w._why === 'fav') return '❤️ Una de tus favoritas';
+  return r ? '📖 Sigues leyendo' : '📺 Sigues viendo';
+}
+
 function spotlightHTML(w) {
   const t = continueTarget(w);
   const pct = progressPct(w);
@@ -376,7 +418,7 @@ function spotlightHTML(w) {
     <div class="sp-bg">${w.cover ? `<img src="${esc(w.cover)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
     <a href="#/obra/${w.id}" class="sp-cover" aria-label="${esc(w.title)}">${coverHTML(w)}</a>
     <div class="sp-info">
-      <span class="sp-kicker">${TYPES[w.type].reading ? '📖 Sigues leyendo' : '📺 Sigues viendo'}</span>
+      <span class="sp-kicker ${w._why || ''}">${spotKicker(w)}</span>
       <h2>${esc(w.title)}</h2>
       <div class="sp-meta">
         ${pct != null ? `<svg class="ring" viewBox="0 0 60 60" aria-label="${pct}%"><circle cx="30" cy="30" r="26" class="ring-bg"/><circle cx="30" cy="30" r="26" class="ring-fg" style="--len:${C};--off:${C * (1 - pct / 100)}"/><text x="30" y="35" text-anchor="middle">${pct}%</text></svg>` : ''}
@@ -392,6 +434,32 @@ function spotlightHTML(w) {
       </div>
     </div>
   </section>`;
+}
+
+// ---------- Buscar otra obra (desde cualquier pantalla) ----------
+export function openSearchSheet() {
+  const recent = [...S.works].sort((a, b) => lastTouch(b) - lastTouch(a)).slice(0, 8);
+  const itemHTML = (w, i) => `<button class="sg-item" data-open-work="${w.id}" style="--i:${i}">
+      ${coverHTML(w, 'xs')}
+      <span class="sg-text"><b>${esc(w.title)}</b><small>${TYPES[w.type].emoji} ${TYPES[w.type].label} · ${esc(progressLabel(w) || statusLabel(w.status, w.type))}</small></span>
+      <span class="sdot" style="--c:${STATUSES[w.status]?.color}"></span></button>`;
+  const s = openSheet(`<h3 class="sheet-title">🔎 Buscar en tu biblioteca</h3>
+    <div class="searchbar in-sheet"><span class="ic">${ICONS.search}</span>
+      <input id="ss-q" type="search" placeholder="Nombre de la obra…" autocomplete="off" enterkeyhint="search"></div>
+    <div id="ss-res" class="ss-res">${recent.length ? `<p class="ss-label">Lo último que abriste</p>${recent.map(itemHTML).join('')}` : '<p class="muted small center pad">Tu biblioteca está vacía.</p>'}</div>`, { cls: 'tall' });
+  const q = $('#ss-q', s.el), res = $('#ss-res', s.el);
+  q.addEventListener('input', debounce(() => {
+    const v = q.value.trim();
+    if (!v) { res.innerHTML = recent.length ? `<p class="ss-label">Lo último que abriste</p>${recent.map(itemHTML).join('')}` : ''; return; }
+    const found = searchWorks(v, 12);
+    res.innerHTML = found.length ? found.map(itemHTML).join('') : `<div class="sg-empty">No tienes nada parecido a "<b>${esc(v)}</b>".</div><button class="btn block" data-ss-add>＋ Agregar "${esc(v.slice(0, 30))}"</button>`;
+  }, 120));
+  q.addEventListener('keydown', (e) => { if (e.key === 'Enter') res.querySelector('[data-open-work]')?.click(); });
+  res.addEventListener('click', (e) => {
+    const it = e.target.closest('[data-open-work]');
+    if (it) { vibrate(8); s.close(); whenSettled(() => go('#/obra/' + it.dataset.openWork)); return; }
+    if (e.target.closest('[data-ss-add]')) { const v = q.value.trim(); s.close(); whenSettled(() => openEditor(null, { prefill: { title: v } })); }
+  });
 }
 
 // ---------- ¿Qué sigue? (ruleta) ----------
@@ -899,6 +967,7 @@ async function renderDetail(root, id) {
       <header class="topbar clear">
         <button class="icon-btn" id="back" aria-label="Volver">${ICONS.back}</button>
         <div class="grow"></div>
+        <button class="icon-btn" id="d-search" aria-label="Buscar otra obra">${ICONS.search}</button>
         <button class="icon-btn ${w.favorite ? 'on-fav' : ''}" id="fav" aria-label="Favorito" aria-pressed="${w.favorite}">${ICONS.heart}</button>
         <button class="icon-btn" id="edit" aria-label="Editar">${ICONS.edit}</button>
       </header>
@@ -951,6 +1020,7 @@ async function renderDetail(root, id) {
   if (document.startViewTransition) $('#hero-cover .cover', root).style.viewTransitionName = 'vt-cover';
   $('#back', root).onclick = () => (history.length > 1 && lastRouteWasInternal ? history.back() : go('#/'));
   $('#edit', root).onclick = () => openEditor(w);
+  $('#d-search', root).onclick = () => openSearchSheet();
   $('#fav', root).onclick = async (e) => {
     const btn = e.currentTarget;
     w.favorite = !w.favorite;

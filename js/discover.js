@@ -85,6 +85,7 @@ export function renderDiscover(root, param) {
   <header class="topbar">
     <a href="#/" class="icon-btn" aria-label="Volver">${ICONS.back}</a>
     <div class="grow"><h1 class="page-title">✨ Descubrir</h1><p class="sub">Recomendaciones para leer y ver</p></div>
+    <button class="icon-btn" data-global-search aria-label="Buscar en tu biblioteca">${ICONS.search}</button>
   </header>
   <div class="chips scroll-x dtabs" id="d-tabs">${TABS.map(([k, e, l]) => `<button class="chip ${k === tab ? 'on' : ''}" data-tab="${k}">${e} ${l}</button>`).join('')}</div>
   <div id="d-body"></div>

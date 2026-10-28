@@ -84,7 +84,9 @@ En Android, con la app instalada, también puedes usar **Compartir → Alejandr�
 ### 4. Pantalla de inicio
 - **Saludo** al abrir y luego el nombre de la app.
 - **Buscador inteligente**: mientras escribes muestra sugerencias con portada de lo que más se parece (aunque escribas con errores, p. ej. *"solo levlng"*). Toca una para abrirla, o *＋ Agregar* si no la tienes.
-- **Tarjeta destacada** con lo que estás siguiendo y su anillo de progreso. **Cambia sola cada 5 segundos** entre tus 5 obras en curso (también puedes deslizarla o tocar los puntos) y se abre al tocarla en cualquier parte.
+- **🔎 Buscar desde cualquier pantalla**: dentro de una obra, en Plataformas, Estadísticas y Descubrir hay una lupa para saltar a otra obra.
+- **Logo**: tocar el logo del inicio te sube arriba y quita la búsqueda y los filtros.
+- **Tarjeta destacada** que **cambia sola cada 5 segundos**: lo último que estás siguiendo, lo que **llevas días sin leer o ver**, algún **pendiente** y alguna **favorita**, cada una con su motivo. También puedes deslizarla o tocar los puntos, y se abre al tocarla en cualquier parte.
 - **🎲 ¿Qué sigue?**: una ruleta que elige al azar qué leer o ver, y debajo recomendaciones de obras nuevas para ti.
 - **✨ Descubrir** y **Te puede gustar**: recomendaciones (ver abajo).
 - **Continuar**: carrusel con lo que tienes en curso.
@@ -100,7 +102,11 @@ Toca **✨ Descubrir** en el inicio. Hay pestañas **Para ti, Manhwa, Manga, Ani
 - Toca una portada para ver su sinopsis, géneros y calificación, y agrégala como **pendiente** o como **ya la estoy leyendo/viendo**. Las que ya tienes salen con **✓ La tienes**.
 
 ### 5. Plataformas
-En la pestaña **Plataformas** ves un resumen y una tarjeta por plataforma (Netflix, Prime Video, Disney+, HBO Max, YouTube, Crunchyroll y páginas web) con portadas, cuántas obras tienes y su estado. Al entrar a una ves sus números, lo que tienes en curso y filtros por estado. Las plataformas que aún no usas aparecen abajo en una fila compacta. Si alguna serie o película no tiene plataforma, aparece un aviso para elegirla (también desde las acciones rápidas).
+En la pestaña **Plataformas** hay dos secciones:
+- **📺 Dónde ves**: un recuadro por plataforma de streaming (Netflix, Prime Video, Disney+, HBO Max, Apple TV+, Paramount+, Crunchyroll, YouTube, ViX, Pluto TV y MUBI) con portadas, cuántas obras tienes y su estado.
+- **📖 Dónde lees**: un recuadro por cada página donde lees manhwas y mangas (Olympus, MHScans…), armado solo con tus links.
+
+Al entrar a una ves sus números, lo que tienes en curso y filtros por estado. Si alguna serie o película no tiene plataforma, aparece un aviso para elegirla (también desde las acciones rápidas).
 
 ### 6. Deportes
 Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UFC**. La app recuerda el último que abriste.
@@ -122,7 +128,9 @@ Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UF
 
 **Fútbol**
 - **🛡️ Equipos**: toca **＋ Agregar equipo o selección**, búscalo (clubes de todo el mundo y selecciones) y toca **Seguir**. Cada recuadro muestra su próximo partido o el marcador en vivo. Al abrirlo ves su posición, la racha de los últimos 5 partidos y sus próximos partidos y resultados en **todas las competiciones** (liga, copa, Libertadores…).
-- **🏆 Torneos**: separados en **Ligas** (Liga BetPlay, Primera B, Premier, La Liga, Serie A, Bundesliga, Liga MX, MLS…) y **Copas y torneos** (Champions, Europa League, Libertadores, Sudamericana, Copa Colombia, Mundial, Eliminatorias, Copa América…). También puedes buscar cualquier otro por nombre. Dentro de cada uno:
+- **🏟️ Ligas**: las ligas de cada país junto con sus copas, agrupadas por país (por ejemplo Colombia: Liga BetPlay, Primera B y Copa Colombia; Inglaterra: Premier League y FA Cup).
+- **🏆 Torneos**: solo las competencias internacionales (Champions, Europa League, Libertadores, Sudamericana, Mundial, Eliminatorias, Copa América…).
+- En **Equipos** aparece arriba **tu próximo partido** con cuenta regresiva (o el marcador si está en vivo). Puedes buscar cualquier liga o torneo por nombre. Dentro de cada uno:
   - **Partidos**: el calendario completo de la temporada, fecha por fecha.
   - **Tabla** (en las ligas y en la fase de liga o de grupos de los torneos): la tabla completa con PJ, G, E, P, diferencia de gol y puntos, y los colores de clasificación y descenso. Toca un equipo para seguirlo.
   - **Torneos**: otros torneos del mismo país.

@@ -2,13 +2,13 @@
 // y cada partido con goles, tarjetas, cambios, alineaciones y estadísticas.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, hueOf, vibrate, imageToDataURL } from './ui.js';
 import { S, setPref, openUrl } from './store.js';
-import { ATTRIBUTION, POPULAR_LEAGUES, LEGACY_LEAGUES, isCup, soccerSearchTeams, soccerSearchLeagues, soccerTeamSchedule, soccerCalendar, soccerSummary, posEs, sportDay, sportStandings } from './api.js';
+import { ATTRIBUTION, POPULAR_LEAGUES, LEGACY_LEAGUES, isIntl, compKind, soccerSearchTeams, soccerSearchLeagues, soccerTeamSchedule, soccerCalendar, soccerSummary, posEs, sportDay, sportStandings } from './api.js';
 import { avatar, gameCard, statusEs, centerIn, dayLabel, addDays, cap, fmtDay, fmtLong, ytSearch, loading, errorBox, updated, tickCountdowns } from './sports.js';
 import { db } from './db.js';
 
 let tab = 'equipos';
 let rootEl = null;
-const TABS = ['equipos', 'ligas', 'hoy'];
+const TABS = ['equipos', 'ligas', 'torneos', 'hoy'];
 
 // ---------- piezas visuales ----------
 export const teamAvatar = (t, size = '') => avatar(t, size);
@@ -79,10 +79,8 @@ export function renderFootball(root, param) {
   rootEl = root;
   if (TABS.includes(param)) tab = param;
   root.innerHTML = `<div class="fb">
-  <div class="tabs2 three" role="tablist">
-    <button role="tab" class="${tab === 'equipos' ? 'on' : ''}" data-tab="equipos">🛡️ Equipos <em>${S.teams.length}</em></button>
-    <button role="tab" class="${tab === 'ligas' ? 'on' : ''}" data-tab="ligas">🏆 Torneos <em>${(S.settings.leagues || []).length}</em></button>
-    <button role="tab" class="${tab === 'hoy' ? 'on' : ''}" data-tab="hoy">📅 Hoy</button>
+  <div class="tabs2 four stacked" role="tablist">
+    ${[['equipos', '🛡️', 'Equipos'], ['ligas', '🏟️', 'Ligas'], ['torneos', '🏆', 'Torneos'], ['hoy', '📅', 'Hoy']].map(([k, e, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" data-tab="${k}"><span class="t-ic">${e}</span><span>${l}</span>${k !== 'hoy' ? `<em data-count="${k}"></em>` : ''}</button>`).join('')}
     <i class="tabs2-pill" style="--x:${TABS.indexOf(tab)}"></i>
   </div>
   <div id="fb-body"></div>
@@ -105,19 +103,19 @@ function drawTab() {
   const body = $('#fb-body', rootEl);
   if (!body) return;
   body.classList.remove('tab-in'); void body.offsetWidth; body.classList.add('tab-in');
-  const [a, b] = $$('.fb .tabs2 em', rootEl);
-  if (a) a.textContent = S.teams.length;
-  if (b) b.textContent = (S.settings.leagues || []).length;
-  if (tab === 'ligas') drawLeagues(body); else if (tab === 'hoy') drawToday(body); else drawTeams(body);
+  const counts = { equipos: S.teams.length, ligas: (S.settings.leagues || []).filter((l) => !isIntl(l.id)).length, torneos: (S.settings.leagues || []).filter((l) => isIntl(l.id)).length };
+  $$('.fb .tabs2 em[data-count]', rootEl).forEach((em) => { const n = counts[em.dataset.count]; em.textContent = n || ''; em.hidden = !n; });
+  if (tab === 'ligas') drawLeagues(body, false); else if (tab === 'torneos') drawLeagues(body, true); else if (tab === 'hoy') drawToday(body); else drawTeams(body);
 }
 const refresh = () => { if (rootEl?.isConnected && $('#fb-body', rootEl)) drawTab(); };
 
 // ======================= EQUIPOS =======================
 function drawTeams(body) {
   body.innerHTML = `
+    <div id="fb-next-hero"></div>
     <button class="add-big" id="add-team"><span>＋</span><b>Agregar equipo o selección</b></button>
     <div class="fb-grid" id="team-grid">${S.teams.map((t, i) => `
-      <button class="fb-tile" data-team="${esc(t.id)}" style="--i:${i}">
+      <button class="fb-tile team-tile" data-team="${esc(t.id)}" style="--i:${i};--tc1:${t.color1 || '#16a34a'};--tc2:${t.color2 || '#0f172a'}">
         ${avatar(t, 'md')}
         <b>${esc(t.name)}</b>
         <small>${esc(leagueName(t.league) || t.country || '')}</small>
@@ -129,10 +127,31 @@ function drawTeams(body) {
     const t = e.target.closest('[data-team]');
     if (t) openTeam(S.teams.find((x) => x.id === t.dataset.team));
   });
+  // el partido más cercano de tus equipos, arriba y en grande
+  const nexts = [];
+  const drawHero = () => {
+    const box = $('#fb-next-hero', body);
+    if (!box?.isConnected) return;
+    const g = nexts.sort((a, b) => (a.state === 'in' ? -1 : 0) - (b.state === 'in' ? -1 : 0) || a.ts.localeCompare(b.ts))[0];
+    if (!g) return;
+    const live = g.state === 'in';
+    box.innerHTML = `<button class="fb-hero-match ${live ? 'is-live' : ''}" data-hero-game>
+      <span class="fhm-kicker">${live ? '<i class="live-dot"></i> En vivo ahora' : 'Tu próximo partido'} · ${esc(g.league || '')}</span>
+      <span class="fhm-row">
+        <span class="fhm-team">${avatar(g.home, 'lg')}<b>${esc(g.home.short || g.home.name)}</b></span>
+        <span class="fhm-mid">${live ? `<b class="fhm-score">${esc(g.home.score)} – ${esc(g.away.score)}</b><small>${esc(statusEs(g, 'futbol'))}</small>` : `<b class="fhm-vs">VS</b><small data-cd="${esc(g.ts)}"></small>`}</span>
+        <span class="fhm-team">${avatar(g.away, 'lg')}<b>${esc(g.away.short || g.away.name)}</b></span>
+      </span>
+      <span class="fhm-date">📅 ${esc(fmtLong(g.ts))}</span>
+    </button>`;
+    tickCountdowns(box);
+    box.querySelector('[data-hero-game]').onclick = () => openMatch(g);
+  };
   S.teams.forEach(async (t) => {
     const el = $('#nx-' + CSS.escape(t.id), body);
     try {
       const r = await soccerTeamSchedule(t.id);
+      if (r.data.upcoming[0] && !nexts.some((x) => x.id === r.data.upcoming[0].id)) { nexts.push(r.data.upcoming[0]); drawHero(); }
       if (!el?.isConnected) return;
       if ((!t.color1 && r.data.color1) || t.standing !== r.data.standing) { t.color1 = t.color1 || r.data.color1; t.color2 = t.color2 || r.data.color2; t.standing = r.data.standing; db.put('teams', t); }
       const n = r.data.upcoming[0], l = r.data.results[0];
@@ -273,22 +292,34 @@ async function drawToday(body) {
   };
 }
 
-// ======================= LIGAS =======================
-function drawLeagues(body) {
-  const mine = S.settings.leagues || [];
-  body.innerHTML = `
-    <button class="add-big" id="add-league"><span>＋</span><b>Agregar liga o torneo</b></button>
-    <div id="lg-grid">${[['🏟️ Ligas', mine.filter((l) => !isCup(l.id))], ['🏆 Copas y torneos', mine.filter((l) => isCup(l.id))]].filter(([, l]) => l.length).map(([title, list]) => `
-      <h3 class="fb-sec">${title}</h3>
-      <div class="fb-grid">${list.map((lg, i) => { const st = leagueStyle(lg); return `
+// ======================= LIGAS Y TORNEOS =======================
+// Ligas: las de cada país junto con sus copas. Torneos: competencias internacionales.
+const countryOf = (lg) => popular(lg.id)?.country || lg.country || 'Otras';
+const flagOf = (lg) => popular(lg.id)?.flag || '🏳️';
+function drawLeagues(body, intl) {
+  const mine = (S.settings.leagues || []).filter((l) => isIntl(l.id) === intl);
+  const tileHTML = (lg, i) => { const st = leagueStyle(lg); return `
       <button class="fb-tile lg-tile" data-lg="${esc(lg.id)}" style="--i:${i};--c1:${st.c1};--c2:${st.c2}">
         ${leagueBadge(lg, 'md')}
+        <span class="lg-kind">${compKind(lg.id)}</span>
         <b>${esc(lg.name)}</b>
         <small>${esc(lg.country || '')}</small>
         <span class="fb-next" id="lgn-${esc(lg.id.replace(/\W/g, '_'))}"><span class="dots"><i></i><i></i><i></i></span></span>
-      </button>`; }).join('')}</div>`).join('')}</div>
-    ${mine.length ? '' : `<div class="empty small"><div class="empty-art"><span>🏆</span></div><h3>Sigue tus ligas y torneos</h3><p class="muted">Toca "Agregar liga o torneo" para elegir la Liga BetPlay, la Premier, la Champions, la Libertadores y más.</p></div>`}`;
-  $('#add-league', body).onclick = openLeagueSearch;
+      </button>`; };
+  let groups;
+  if (intl) groups = mine.length ? [['', mine]] : [];
+  else {
+    const by = new Map();
+    mine.forEach((l) => { const c = countryOf(l); if (!by.has(c)) by.set(c, []); by.get(c).push(l); });
+    groups = [...by.entries()].map(([c, list]) => [`${flagOf(list[0])} ${c}`, list.sort((x, y) => (compKind(x.id) === 'Liga' ? -1 : 1) - (compKind(y.id) === 'Liga' ? -1 : 1))]);
+  }
+  body.innerHTML = `
+    <button class="add-big" id="add-league"><span>＋</span><b>${intl ? 'Agregar torneo internacional' : 'Agregar liga o copa de un país'}</b></button>
+    <div id="lg-grid">${groups.map(([title, list]) => `${title ? `<h3 class="fb-sec">${esc(title)}</h3>` : ''}<div class="fb-grid">${list.map(tileHTML).join('')}</div>`).join('')}</div>
+    ${mine.length ? '' : intl
+      ? '<div class="empty small"><div class="empty-art"><span>🏆</span></div><h3>Sigue torneos internacionales</h3><p class="muted">Champions, Libertadores, Sudamericana, Mundial, Eliminatorias, Copa América y más.</p></div>'
+      : '<div class="empty small"><div class="empty-art"><span>🏟️</span></div><h3>Sigue las ligas de cada país</h3><p class="muted">Liga BetPlay, Premier, La Liga, Liga MX… junto con sus copas, como la Copa Colombia.</p></div>'}`;
+  $('#add-league', body).onclick = () => openLeagueSearch(intl);
   $('#lg-grid', body).addEventListener('click', (e) => {
     const t = e.target.closest('[data-lg]');
     if (t) openLeague(mine.find((l) => l.id === t.dataset.lg));
@@ -311,19 +342,21 @@ async function followLeague(lg) {
   list.push({ id: lg.id, name: lg.name, country: lg.country || '' });
   await setPref('leagues', list);
   vibrate(12);
-  toast(`Sigues ${isCup(lg.id) ? 'el torneo' : 'la liga'} ${lg.name}`, { icon: isCup(lg.id) ? '🏆' : '🏟️' });
+  toast(`Sigues ${isIntl(lg.id) ? 'el torneo' : compKind(lg.id) === 'Copa' ? 'la copa' : 'la liga'} ${lg.name}`, { icon: isIntl(lg.id) ? '🏆' : '🏟️' });
   refresh();
   return true;
 }
 
-function openLeagueSearch() {
+function openLeagueSearch(intl = false) {
   const mine = () => S.settings.leagues || [];
+  const pops = POPULAR_LEAGUES.filter((p) => isIntl(p.id) === intl);
+  const groups = intl ? [['🏆 Torneos internacionales', pops]] : [...new Set(pops.map((p) => p.country))].map((c) => [`${pops.find((p) => p.country === c).flag} ${c}`, pops.filter((p) => p.country === c)]);
   const s = openSheet(`
-    <h3 class="sheet-title">Agregar liga o torneo</h3>
+    <h3 class="sheet-title">${intl ? 'Agregar torneo internacional' : 'Agregar liga o copa'}</h3>
     <div class="searchbar in-sheet"><span class="ic">${ICONS.search}</span>
-      <input id="ls-q" type="search" placeholder="Nombre o país (p. ej. Liga MX, Chile, Eredivisie)" autocomplete="off" enterkeyhint="search"></div>
+      <input id="ls-q" type="search" placeholder="${intl ? 'Nombre (p. ej. Concacaf, Mundial de Clubes)' : 'Nombre o país (p. ej. Liga MX, Chile, Eredivisie)'}" autocomplete="off" enterkeyhint="search"></div>
     <div id="ls-res"></div>
-    ${[['🏟️ Ligas', POPULAR_LEAGUES.filter((p) => !isCup(p.id))], ['🏆 Copas y torneos', POPULAR_LEAGUES.filter((p) => isCup(p.id))]].map(([title, pops]) => `
+    ${groups.map(([title, pops]) => `
     <h4 class="ls-title">${title}</h4>
     <div class="lg-popgrid">${pops.map((p, i) => `<button class="lg-chip ${mine().some((l) => l.id === p.id) ? 'on' : ''}" data-pop="${p.id}" style="--c1:${p.c1};--c2:${p.c2};--i:${i}"><span class="lg-flag">${p.flag}</span><b>${esc(p.name)}</b><small>${esc(p.country)}</small>${mine().some((l) => l.id === p.id) ? '<i class="lg-check">✓</i>' : ''}</button>`).join('')}</div>`).join('')}`, { cls: 'tall' });
   s.el.addEventListener('click', async (e) => {
@@ -345,7 +378,7 @@ function openLeagueSearch() {
       found = (await soccerSearchLeagues(v)).filter((l) => !popular(l.id));
       if (tk !== token) return;
       res.innerHTML = found.length ? `<ul class="team-results">${found.map((l, i) => `<li style="--i:${i}">${leagueBadge(l, 'sm')}<div class="grow"><b>${esc(l.name)}</b></div>
-        <small class="tag">${isCup(l.id) ? 'Torneo' : 'Liga'}</small>${mine().some((x) => x.id === l.id) ? '<span class="tag ok">Siguiendo</span>' : `<button class="btn sm primary" data-addlg="${esc(l.id)}">Seguir</button>`}</li>`).join('')}</ul>`
+        <small class="tag">${compKind(l.id)}</small>${mine().some((x) => x.id === l.id) ? '<span class="tag ok">Siguiendo</span>' : `<button class="btn sm primary" data-addlg="${esc(l.id)}">Seguir</button>`}</li>`).join('')}</ul>`
         : '<p class="muted small center pad">No encontré otros torneos con ese nombre. Revisa también la lista de populares.</p>';
     } catch { if (tk === token) res.innerHTML = errorBox('No se pudo buscar (¿sin conexión?).'); }
   };
@@ -364,13 +397,13 @@ function openLeague(lg) {
     <div class="fb-hero" style="--c1:${st.c1};--c2:${st.c2}">
       <div class="fb-hero-av">${leagueBadge(lg, 'xl')}</div>
       <h3>${esc(lg.name)}</h3>
-      <p class="muted small" id="lg-sub">${isCup(lg.id) ? 'Torneo' : 'Liga'}${lg.country ? ` · ${esc(lg.country)}` : ''}</p>
+      <p class="muted small" id="lg-sub">${compKind(lg.id)}${lg.country ? ` · ${esc(lg.country)}` : ''}</p>
       <div class="fb-actions">
         <button class="btn sm" data-act="crest">🛡️ Escudo</button>
         <button class="btn sm danger ghost" data-act="del">${ICONS.trash} Quitar</button>
       </div>
     </div>
-    <div class="seg mh-tabs" id="lg-tabs"><button class="on" data-v="partidos">Partidos</button><button data-v="tabla">Tabla</button><button data-v="torneos">Torneos</button></div>
+    <div class="seg mh-tabs" id="lg-tabs"><button class="on" data-v="partidos">Partidos</button><button data-v="tabla">Tabla</button><button data-v="torneos">Relacionados</button></div>
     <div id="lg-body">${loading()}</div>`, { cls: 'tall' });
   const body = $('#lg-body', s.el);
   let view = 'partidos', dates = [], dayIdx = 0, games = [];
@@ -419,7 +452,7 @@ function openLeague(lg) {
     try {
       const c = await soccerCalendar(lg.id);
       if (!s.open || view !== 'partidos') return;
-      if (c.data.season) $('#lg-sub', s.el).textContent = [isCup(lg.id) ? 'Torneo' : 'Liga', lg.country, phaseEs(c.data.season)].filter(Boolean).join(' · ');
+      if (c.data.season) $('#lg-sub', s.el).textContent = [compKind(lg.id), lg.country, phaseEs(c.data.season)].filter(Boolean).join(' · ');
       const today = isoOf(new Date());
       dates = c.data.dates.length ? c.data.dates : Array.from({ length: 15 }, (_, k) => isoOf(addDays(new Date(), k - 7)));
       dayIdx = dates.findIndex((d) => d >= today);
@@ -474,8 +507,8 @@ function openLeague(lg) {
       });
     }
     if (b.dataset.act === 'del') {
-      const cup = isCup(lg.id);
-      if (!(await confirmDialog(`¿Dejar de seguir ${cup ? 'este torneo' : 'esta liga'}?`, `${lg.name} se quitará de tus torneos.`, { ok: cup ? 'Quitar torneo' : 'Quitar liga', danger: true }))) return;
+      const kind = compKind(lg.id), intlC = isIntl(lg.id);
+      if (!(await confirmDialog(`¿Dejar de seguir ${intlC ? 'este torneo' : kind === 'Copa' ? 'esta copa' : 'esta liga'}?`, `${lg.name} se quitará de ${intlC ? 'tus torneos' : 'tus ligas'}.`, { ok: intlC ? 'Quitar torneo' : kind === 'Copa' ? 'Quitar copa' : 'Quitar liga', danger: true }))) return;
       await setPref('leagues', (S.settings.leagues || []).filter((l) => l.id !== lg.id));
       toast(`${lg.name} quitada`, { icon: '🗑️' });
       s.close();
