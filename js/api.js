@@ -21,13 +21,24 @@ export const pubStatusEs = (s) => PUB_STATUS[s] || s || '';
 
 const stripHtml = (s = '') => s.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#039;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 
-async function fetchJSON(url, opts = {}, timeout = 12000) {
+// Descarga JSON con tiempo límite. Si falla la red o el servidor (no un "no existe"),
+// se reintenta una vez: así cargan bien las cosas con señal débil.
+async function fetchJSON(url, opts = {}, timeout = 12000, retry = 1) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
     const r = await fetch(url, { ...opts, signal: ctrl.signal });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      const err = new Error('HTTP ' + r.status);
+      err.status = r.status;
+      throw err;
+    }
     return await r.json();
+  } catch (err) {
+    const retryable = retry > 0 && navigator.onLine !== false && (!err.status || err.status >= 500 || err.status === 429);
+    if (!retryable) throw err;
+    await new Promise((res) => setTimeout(res, 700));
+    return fetchJSON(url, opts, timeout, retry - 1);
   } finally { clearTimeout(t); }
 }
 

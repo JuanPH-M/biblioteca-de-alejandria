@@ -11,38 +11,45 @@ const backHeader = (title, sub = '', back = '#/') => `
     <a href="${back}" class="icon-btn" aria-label="Volver">${ICONS.back}</a>
     <div class="grow"><h1 class="page-title">${title}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div>
   </header>`;
-const pageHeader = (title, sub = '') => `
-  <header class="topbar">
-    <div class="grow"><h1 class="page-title big">${title}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div>
-    <button class="icon-btn" data-global-search aria-label="Buscar en tu biblioteca">${ICONS.search}</button>
-    <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
-  </header>`;
 
-// ======================= PLATAFORMAS =======================
+// ======================= DÓNDE LEES Y DÓNDE VES =======================
 const NONE_KEY = 'ninguna';
 const SITE = 'sitio:';
-// Nombre bonito de un sitio de lectura: "olympusxyz.com" → "Olympus"
-const SITE_NAMES = { olympus: 'Olympus', mhscans: 'MHScans', leercapitulo: 'LeerCapítulo', manhwaweb: 'ManhwaWeb', tmo: 'TMO', lectortmo: 'LectorTMO', zonatmo: 'ZonaTMO', inmanga: 'InManga', mangadex: 'MangaDex', webtoons: 'Webtoon', tapas: 'Tapas' };
+// Nombre bonito de una página de lectura: "olympusxyz.com" → "Olympus", "r1.richtoon.top" → "RichToon"
+const SITE_NAMES = { olympus: 'Olympus', mhscans: 'MHScans', leercapitulo: 'LeerCapítulo', manhwaweb: 'ManhwaWeb', imperiomanhwa: 'ImperioManhwa', richtoon: 'RichToon', tmo: 'TMO', lectortmo: 'LectorTMO', zonatmo: 'ZonaTMO', inmanga: 'InManga', mangadex: 'MangaDex', webtoons: 'Webtoon', tapas: 'Tapas' };
 export function siteName(host = '') {
-  const base = host.replace(/^www\./, '').split('.').slice(-2, -1)[0] || host;
-  const known = Object.entries(SITE_NAMES).find(([k]) => base.toLowerCase().startsWith(k));
+  const parts = host.replace(/^www\./, '').split('.');
+  const base = parts.length > 1 ? parts[parts.length - 2] : host;
+  const known = Object.entries(SITE_NAMES).find(([k]) => base.toLowerCase().startsWith(k) || host.toLowerCase().includes(k));
   return known ? known[1] : base.charAt(0).toUpperCase() + base.slice(1);
 }
 const hostOf = (w) => { const l = (w.links || []).find((x) => x.platform === 'web'); return l ? (l.host || '').replace(/^www\./, '') : ''; };
+const siteOf = (w) => { const h = hostOf(w); return h ? siteName(h) : ''; };
 function platformWorks(key) {
   if (key === NONE_KEY) return S.works.filter((w) => TRACK_ONLY.includes(w.type) && !platformsOf(w).length);
-  if (key.startsWith(SITE)) { const h = key.slice(SITE.length); return S.works.filter((w) => hostOf(w) === h); }
+  if (key.startsWith(SITE)) { const n = key.slice(SITE.length); return S.works.filter((w) => siteOf(w) === n); }
   return S.works.filter((w) => platformsOf(w).includes(key));
 }
 const STREAM_DESC = 'Series y películas';
 const PLAT_DESC = { youtube: 'Videos y series', crunchyroll: 'Anime', vix: 'Series, novelas y películas', pluto: 'Canales gratis', mubi: 'Cine de autor', [NONE_KEY]: 'Series y películas sin elegir' };
 const descOf = (k) => PLAT_DESC[k] || STREAM_DESC;
-const siteColor = (h) => `hsl(${hueOf(h)} 65% 45%)`;
-// Sitios de lectura que usas, con cuántas obras tienes en cada uno
+const siteColor = (n) => `hsl(${hueOf(n)} 65% 45%)`;
+// Logo (ícono) de una página, desde el servicio público de íconos de DuckDuckGo
+export const favicon = (host) => `https://icons.duckduckgo.com/ip3/${encodeURIComponent(host)}.ico`;
+// Páginas de lectura que usas: una sola por nombre aunque tengan varios dominios (r1., r2., .com, .net…)
 function readingSites() {
-  const c = new Map();
-  S.works.forEach((w) => { const h = hostOf(w); if (h) c.set(h, (c.get(h) || 0) + 1); });
-  return [...c.entries()].sort((x, y) => y[1] - x[1]).map(([h]) => h);
+  const m = new Map();
+  S.works.forEach((w) => {
+    const h = hostOf(w);
+    if (!h) return;
+    const n = siteName(h);
+    const cur = m.get(n) || { name: n, hosts: new Map(), works: [] };
+    cur.hosts.set(h, Math.max(cur.hosts.get(h) || 0, (w.lastOpened || w.updatedAt || 0)));
+    cur.works.push(w);
+    m.set(n, cur);
+  });
+  // el dominio más reciente es el que se abre
+  return [...m.values()].map((x) => ({ ...x, host: [...x.hosts.entries()].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.works.length - a.works.length);
 }
 
 function statusBar(list) {
@@ -63,43 +70,63 @@ function tileHTML(href, name, color, list, desc, icon, i) {
   </a>`;
 }
 
-export function renderPlatforms(root) {
-  const none = platformWorks(NONE_KEY);
+// Sección "Dónde lees" del inicio de Lectura: tus páginas con su logo y un botón para abrirlas
+export function readPlacesHTML() {
   const sites = readingSites();
-  const streamUsed = STREAMING.filter((k) => platformWorks(k).length);
-  const inStream = new Set(STREAMING.flatMap((k) => platformWorks(k).map((w) => w.id)));
-  const reading = S.works.filter((w) => hostOf(w));
+  const used = new Set(sites.map((x) => x.name));
+  const others = KNOWN_SITES.filter((n) => !used.has(n));
+  return `<section class="places" id="places">
+    <div class="sec-head"><h2>📚 Dónde lees</h2><span class="muted small">${sites.length ? `${sites.length} ${sites.length === 1 ? 'página' : 'páginas'}` : ''}</span></div>
+    ${sites.length ? `<div class="site-row">${sites.map((x, i) => {
+      const going = x.works.filter((w) => ['viendo', 'emision'].includes(w.status)).length;
+      return `<div class="site-card" style="--c:${siteColor(x.name)};--i:${i}">
+        <a href="#/plataforma/${SITE}${encodeURIComponent(x.name)}" class="site-main">
+          <span class="site-logo"><img src="${favicon(x.host)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"><i>${esc(x.name.slice(0, 2))}</i></span>
+          <span class="site-text"><b>${esc(x.name)}</b><small>${x.works.length} ${x.works.length === 1 ? 'obra' : 'obras'}${going ? ` · ${going} en curso` : ''}</small></span>
+        </a>
+        <button class="btn sm site-open" data-open-site="https://${esc(x.host)}/">${ICONS.play} Abrir página</button>
+      </div>`;
+    }).join('')}</div>` : '<p class="muted small pad-x">Cuando guardes el link de un manhwa o manga, la página donde lees aparecerá aquí con un botón para abrirla.</p>'}
+    ${others.length ? `<details class="known-sites"><summary>✅ Páginas que la app ya reconoce (${KNOWN_SITES.length})</summary>
+      <p class="muted small">En estas páginas la app entiende solita el nombre y el número del capítulo del link, y arma el siguiente. ${sites.length ? 'Las que ya usas están arriba.' : ''} También reconoce cualquier página con links del tipo <code>/manga/nombre/capitulo-12</code>.</p>
+      <div class="chips wrap">${KNOWN_SITES.map((n) => `<span class="chip ${used.has(n) ? 'on' : ''}">${used.has(n) ? '✓ ' : ''}${esc(n)}</span>`).join('')}</div></details>` : ''}
+  </section>`;
+}
+
+// Sección "Dónde ves" del inicio de Ver: todas las plataformas de streaming
+export function watchPlacesHTML() {
+  const none = platformWorks(NONE_KEY);
   const sorted = [...STREAMING].sort((a, b) => platformWorks(b).length - platformWorks(a).length);
-  root.innerHTML = `${pageHeader('📺 Plataformas', 'Dónde ves y dónde lees cada cosa')}
-  <section class="plat-summary">
-    <div><b data-count="${inStream.size}">${inStream.size}</b><small>series, películas y animes</small></div>
-    <div><b data-count="${streamUsed.length}">${streamUsed.length}</b><small>plataformas en uso</small></div>
-    <div><b data-count="${reading.length}">${reading.length}</b><small>obras en páginas de lectura</small></div>
-  </section>
-  ${none.length ? `<a href="#/plataforma/${NONE_KEY}" class="banner warn plat-none"><span>🤔 ${none.length} ${none.length === 1 ? 'serie o película no tiene' : 'series o películas no tienen'} plataforma. Tócalo para elegirla.</span><b>›</b></a>` : ''}
-  <div class="plat-sec-head"><h2>📺 Dónde ves</h2><span class="muted small">Streaming</span></div>
-  <div class="plat-grid2">${sorted.map((k, i) => tileHTML(`#/plataforma/${k}`, PLATFORMS[k].name, PLATFORMS[k].color, platformWorks(k), descOf(k), ICONS.play, i)).join('')}</div>
-  <div class="plat-sec-head"><h2>📖 Dónde lees</h2><span class="muted small">Páginas de manhwa y manga</span></div>
-  ${sites.length ? `<div class="plat-grid2">${sites.map((h, i) => tileHTML(`#/plataforma/${SITE}${encodeURIComponent(h)}`, siteName(h), siteColor(h), platformWorks(SITE + h), h, ICONS.book, i)).join('')}</div>`
-    : '<p class="muted small pad">Cuando guardes el link de un manhwa o manga, la página donde lees aparecerá aquí.</p>'}
-  <p class="muted small center pad">Toca una plataforma o una página para ver todo lo que tienes ahí. En series y películas la plataforma se elige dentro de cada obra.</p>`;
-  animateCounts(root);
+  return `<section class="places" id="places">
+    <div class="sec-head"><h2>📺 Dónde ves</h2><span class="muted small">${STREAMING.filter((k) => platformWorks(k).length).length} en uso</span></div>
+    ${none.length ? `<a href="#/plataforma/${NONE_KEY}" class="banner warn plat-none"><span>🤔 ${none.length} ${none.length === 1 ? 'serie o película no tiene' : 'series o películas no tienen'} plataforma. Tócalo para elegirla.</span><b>›</b></a>` : ''}
+    <div class="plat-grid2">${sorted.map((k, i) => tileHTML(`#/plataforma/${k}`, PLATFORMS[k].name, PLATFORMS[k].color, platformWorks(k), descOf(k), ICONS.play, i)).join('')}</div>
+  </section>`;
+}
+export function bindPlaces(root) {
+  root.querySelector('#places')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-open-site]');
+    if (b) { e.preventDefault(); vibrate(8); openUrl(b.dataset.openSite); }
+  });
 }
 
 export function renderPlatform(root, key) {
   key = decodeURIComponent(key || '');
   const isNone = key === NONE_KEY;
   const isSite = key.startsWith(SITE);
-  const p = isNone ? { name: 'Sin plataforma', color: '#64748b' } : isSite ? { name: siteName(key.slice(SITE.length)), color: siteColor(key.slice(SITE.length)) } : (PLATFORMS[key] || PLATFORMS.web);
+  const siteN = isSite ? key.slice(SITE.length) : '';
+  const site = isSite ? readingSites().find((x) => x.name === siteN) : null;
+  const p = isNone ? { name: 'Sin plataforma', color: '#64748b' } : isSite ? { name: siteN, color: siteColor(siteN) } : (PLATFORMS[key] || PLATFORMS.web);
   const list = platformWorks(key).sort((a, b) => b.updatedAt - a.updatedAt);
   const going = list.filter((w) => ['viendo', 'emision'].includes(w.status));
   const done = list.filter((w) => w.status === 'terminado').length;
   const progressSum = list.reduce((s2, w) => s2 + (w.type === 'serie' ? Math.max(w.progress.watched || 0, w.progress.episode || 0) : w.type === 'pelicula' ? 0 : Math.floor(w.progress.chapter || 0)), 0);
   let filter = 'all';
-  root.innerHTML = `${backHeader(esc(p.name), `${list.length} ${list.length === 1 ? 'obra' : 'obras'}`, '#/plataformas')}
+  root.innerHTML = `${backHeader(esc(p.name), `${list.length} ${list.length === 1 ? 'obra' : 'obras'}`, isSite ? '#/' : '#/ver')}
   <section class="plat-hero2" style="--c:${p.color}">
     <div class="ph-glow"></div>
-    <div class="ph-row"><span class="plat-glyph big">${isNone ? '🤔' : (key === 'web' || isSite) ? ICONS.book : ICONS.play}</span><div><h2>${esc(p.name)}</h2><small>${isSite ? esc(key.slice(SITE.length)) : isNone ? PLAT_DESC[key] : descOf(key)}</small></div></div>
+    <div class="ph-row"><span class="plat-glyph big ${site ? 'site-logo' : ''}">${site ? `<img src="${favicon(site.host)}" alt="" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"><i>${esc(siteN.slice(0, 2))}</i>` : isNone ? '🤔' : isSite ? ICONS.book : ICONS.play}</span><div><h2>${esc(p.name)}</h2><small>${site ? esc(site.host) : isNone ? PLAT_DESC[key] : descOf(key)}</small></div></div>
+    ${site ? `<button class="btn block site-open-big" data-open-site="https://${esc(site.host)}/">${ICONS.play} Abrir ${esc(siteN)}</button>` : ''}
     <div class="ph-stats">
       <div><b data-count="${list.length}">${list.length}</b><small>obras</small></div>
       <div><b data-count="${going.length}">${going.length}</b><small>en curso</small></div>
@@ -133,6 +160,7 @@ export function renderPlatform(root, key) {
     draw();
   });
   $('#pf-add', root)?.addEventListener('click', () => import('./editor.js').then((m) => m.openAddChooser()));
+  root.querySelector('.site-open-big')?.addEventListener('click', (e) => openUrl(e.currentTarget.dataset.openSite));
   root.querySelectorAll('.c-item').forEach((card) => card.addEventListener('click', (e) => { if (!e.target.closest('a, button')) go('#/obra/' + card.dataset.id); }));
   animateCounts(root);
 }
@@ -186,7 +214,7 @@ export function renderStats(root) {
   const lvl = (n) => (n === 0 ? 0 : Math.min(4, Math.ceil((n / maxA) * 4)));
   const topRated = W.filter((w) => w.rating).sort((a, b) => b.rating - a.rating || b.updatedAt - a.updatedAt).slice(0, 5);
 
-  root.innerHTML = `${pageHeader('Estadísticas', `${W.length} obras en tu biblioteca`)}
+  root.innerHTML = `${backHeader('📊 Estadísticas', `${W.length} obras en tu biblioteca`, '#/ajustes')}
   <div class="kpis">
     ${[['📖', chapters, 'capítulos leídos'], ['📺', episodes, 'episodios vistos'], ['🎬', movies, 'películas vistas'], ['❤️', favs.length, 'favoritas'], ['🏁', W.filter((w) => w.status === 'terminado').length, 'terminadas'], ['▶️', W.filter((w) => ['viendo', 'emision'].includes(w.status)).length, 'en curso']].map(([ic, n, l], i) => `
       <div class="kpi" style="--i:${i}"><span class="kpi-ic">${ic}</span><b data-count="${n}">0</b><small>${l}</small></div>`).join('')}
@@ -237,37 +265,60 @@ export function renderSettings(root) {
     ['emerald', 'Esmeralda', '#10b981', '#84cc16'], ['gold', 'Dorado', '#f59e0b', '#ef4444'], ['naranja', 'Naranja', '#f97316', '#facc15'],
     ['rose', 'Coral', '#f43f5e', '#a855f7'], ['rojo', 'Rojo', '#dc2626', '#f97316'], ['rosa', 'Rosa', '#ec4899', '#8b5cf6'], ['blanco', 'Blanco', '#f4f4f5', '#71717a'],
   ];
-  root.innerHTML = `${backHeader('Ajustes', `Versión ${APP_VERSION}`, '#/')}
+  const W = S.works;
+  const nLeer = W.filter((w) => TYPES[w.type].reading).length, nVer = W.length - nLeer;
+  const nDone = W.filter((w) => w.status === 'terminado').length;
+  const toggle = (id, label, sub, on) => `<label class="toggle set-row"><span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><i></i></label>`;
+  root.innerHTML = `
+  <header class="topbar">
+    <div class="grow"><h1 class="page-title big">⚙️ Ajustes</h1><p class="sub">Versión ${APP_VERSION}</p></div>
+    <button class="icon-btn" data-global-search aria-label="Buscar en tu biblioteca">${ICONS.search}</button>
+  </header>
 
-  <section class="panel">
-    <h3>💾 Respaldo</h3>
+  <section class="set-hero">
+    <img src="icons/icon.svg" alt="" width="54" height="54">
+    <div class="grow"><b>Biblioteca de Alejandría</b><small>Tus datos viven solo en este teléfono</small></div>
+  </section>
+  <div class="set-stats">
+    <a href="#/" style="--i:0"><b>${nLeer}</b><small>📖 para leer</small></a>
+    <a href="#/ver" style="--i:1"><b>${nVer}</b><small>📺 para ver</small></a>
+    <a href="#/stats" style="--i:2"><b>${nDone}</b><small>🏁 terminadas</small></a>
+  </div>
+  <a class="set-link" href="#/stats"><span class="set-ic" style="--c:#8b5cf6">📊</span><span class="grow"><b>Estadísticas</b><small>Capítulos leídos, episodios vistos, actividad y géneros</small></span><b class="chev">›</b></a>
+
+  <h2 class="set-title">💾 Respaldo</h2>
+  <section class="panel set-panel">
     <div class="backup-state ${days == null || days > 14 ? 'warn' : 'ok'}">
       <b>Último respaldo: ${st.lastBackup ? `${new Date(st.lastBackup).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })} (${relTime(st.lastBackup)})` : 'nunca'}</b>
-      <small>${days == null || days > 14 ? 'Te recomiendo respaldar cada 2 semanas. Tus datos viven solo en este teléfono.' : 'Todo bien. Guarda el archivo en Drive o en tu computador.'}</small>
+      <small>${days == null || days > 14 ? 'Te recomiendo respaldar cada 2 semanas y guardar el archivo en Drive o en tu computador.' : 'Todo bien. Guarda el archivo en Drive o en tu computador.'}</small>
     </div>
-    <div class="col-btns">
-      <button class="btn primary" id="export">${ICONS.download} Exportar respaldo (JSON)</button>
-      <label class="btn">${ICONS.upload} Importar respaldo<input type="file" accept=".json,application/json" id="import-json" hidden></label>
+    <div class="row-btns">
+      <button class="btn primary" id="export">${ICONS.download} Exportar</button>
+      <label class="btn">${ICONS.upload} Importar<input type="file" accept=".json,application/json" id="import-json" hidden></label>
     </div>
+    <p class="muted xsmall">Se guardan tus obras, progreso, links, notas, equipos, ligas y ajustes. Las portadas que subiste desde la galería van dentro del archivo; las de un link se guardan como link.</p>
   </section>
 
-  <section class="panel">
-    <h3>🔖 Marcadores de Chrome</h3>
-    <p class="muted small">Importa el archivo .html que exporta Chrome. Reconozco ${KNOWN_SITES.join(', ')} y los sitios que ya me enseñaste.</p>
-    <a class="btn block" href="#/importar">${ICONS.upload} Importar marcadores</a>
+  <h2 class="set-title">🏠 Inicio</h2>
+  <section class="panel set-panel">
+    <div class="set-row col"><span><b>Al abrir la app empezar en</b><small>La pestaña que ves primero</small></span>
+      <div class="seg" id="start-tab">${[['leer', '📖 Lectura'], ['ver', '📺 Ver'], ['deportes', '⚽ Deportes']].map(([k, l]) => `<button class="${(st.startTab || 'leer') === k ? 'on' : ''}" data-start="${k}">${l}</button>`).join('')}</div></div>
+    ${toggle('show-recs', '✨ Mostrar "Te puede gustar"', 'Recomendaciones en Lectura y en Ver', st.showRecs !== false)}
+    ${toggle('show-clock', '🕒 Mostrar fecha y hora', 'Debajo del nombre, en pequeño', st.showClock !== false)}
   </section>
 
-  <section class="panel">
-    <h3>🎨 Apariencia</h3>
-    <p class="muted small">Elige el color de la app. Con <b>Blanco</b> el fondo es negro, las letras blancas y los botones blancos.</p>
+  <h2 class="set-title">🎨 Apariencia</h2>
+  <section class="panel set-panel">
+    <p class="muted small">Color de la app. Con <b>Blanco</b> el fondo es negro y las letras y botones blancos.</p>
     <div class="palette">${accents.map(([k, name, c, c2], i) => `<button class="pal ${st.accent === k ? 'on' : ''}" data-accent="${k}" style="--c:${c};--c2:${c2};--i:${i}" aria-label="Color ${name}"><i></i><span>${name}</span></button>`).join('')}</div>
-    <label class="toggle"><span>Negro puro (AMOLED)</span><input type="checkbox" id="amoled" ${st.amoled ? 'checked' : ''}><i></i></label>
-    <label class="toggle"><span>Reducir animaciones</span><input type="checkbox" id="motion" ${st.motion === 'off' ? 'checked' : ''}><i></i></label>
+    ${toggle('amoled', '🌑 Negro puro (AMOLED)', 'Ahorra batería en pantallas OLED', st.amoled)}
+    ${toggle('motion', '🐢 Reducir animaciones', 'Menos movimiento en la pantalla', st.motion === 'off')}
+    ${toggle('haptics', '📳 Vibración al tocar', 'Pequeña vibración en botones (Android)', st.haptics !== false)}
   </section>
 
-  <section class="panel" id="browser-panel">
-    <h3>🔗 Abrir los links con</h3>
-    <p class="muted small">Elige dónde se abren tus capítulos y links: dentro de la app o en el navegador que prefieras.</p>
+  <h2 class="set-title">🔗 Abrir los links con</h2>
+  <section class="panel set-panel" id="browser-panel">
+    <p class="muted small">Dónde se abren tus capítulos: dentro de la app o en el navegador que prefieras.</p>
     <div class="br-list" role="radiogroup">${browserChoices().map((k, i) => { const b = BROWSERS[k]; const on = (st.browser || 'system') === k; return `<button class="br-opt ${on ? 'on' : ''}" role="radio" aria-checked="${on}" data-browser="${k}" style="--i:${i}">
       <span class="br-emoji">${b.emoji}</span><span class="grow"><b>${esc(b.name)}</b>${b.desc ? `<small>${esc(b.desc)}</small>` : ''}</span><i class="br-radio"></i></button>`; }).join('')}</div>
     ${IS_IOS ? `<p class="note">${IS_STANDALONE ? 'Con la app instalada, <b>Navegador predeterminado</b> abre el link en una ventana encima de la app. Para salir de la app elige <b>Safari</b> u otro navegador. ' : ''}Las apps no pueden ver qué navegadores tienes: si eliges uno que no está instalado, el iPhone avisará que no puede abrir el link. Con <b>Preguntar cada vez</b> eliges en el momento.</p>`
@@ -276,14 +327,21 @@ export function renderSettings(root) {
     <button class="btn block" id="br-test">${ICONS.play} Probar con un link</button>
   </section>
 
-  <section class="panel">
-    <h3>🧩 Patrones de sitios</h3>
-    ${patterns.length ? `<ul class="pattern-list">${patterns.map((p) => `<li><div class="grow"><b>${esc(p.host)}</b><small class="muted">${p.none ? 'Sin número de capítulo' : p.confirmed ? 'Patrón confirmado' : `Capítulo = número ${p.fromEnd + 1}° desde el final`}</small></div><button class="icon-btn xs" data-delpat="${esc(p.host)}" aria-label="Borrar patrón">${ICONS.close}</button></li>`).join('')}</ul>`
-      : '<p class="muted small">Cuando pegues links de sitios nuevos y elijas el número del capítulo, aparecerán aquí.</p>'}
+  <h2 class="set-title">📚 Páginas de lectura</h2>
+  <section class="panel set-panel">
+    <p class="small"><b>Páginas que la app ya entiende</b></p>
+    <p class="muted small">Al pegar un link de estas páginas, la app sabe sola el nombre y el número del capítulo, y arma el siguiente y el anterior. También entiende cualquier página con links como <code>/manga/nombre/capitulo-12</code>.</p>
+    <div class="chips wrap">${KNOWN_SITES.map((n) => `<span class="chip on">✓ ${esc(n)}</span>`).join('')}</div>
+    <div class="set-sep"></div>
+    <p class="small"><b>Páginas que le enseñaste</b></p>
+    <p class="muted small">Cuando pegas el link de una página que la app no conoce, te pregunta cuál de los números del link es el capítulo. La app lo recuerda para esa página y no te lo vuelve a preguntar. Si alguna se equivoca, bórrala aquí y vuelve a pegar un link de esa página.</p>
+    ${patterns.length ? `<ul class="pattern-list">${patterns.map((p) => `<li><span class="site-logo sm"><img src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(p.host)}.ico" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"><i>${esc(p.host.slice(0, 2))}</i></span><div class="grow"><b>${esc(p.host)}</b><small class="muted">${p.none ? 'El link no trae el número del capítulo' : p.confirmed ? 'Número del capítulo confirmado' : `El capítulo es el ${p.fromEnd + 1}.º número desde el final del link`}</small></div><button class="icon-btn xs" data-delpat="${esc(p.host)}" aria-label="Olvidar esta página">${ICONS.close}</button></li>`).join('')}</ul>`
+      : '<p class="muted small">Todavía no le has enseñado ninguna.</p>'}
+    <a class="btn block" href="#/importar">${ICONS.upload} Importar marcadores de Chrome</a>
   </section>
 
-  <section class="panel">
-    <h3>🛠️ Herramientas</h3>
+  <h2 class="set-title">🛠️ Herramientas</h2>
+  <section class="panel set-panel">
     <div class="col-btns">
       <button class="btn" id="fill-covers">${ICONS.sparkle} Completar portadas faltantes</button>
       <button class="btn install-btn" id="install">📲 Instalar app</button>
@@ -300,6 +358,7 @@ export function renderSettings(root) {
       <li>Datos de películas y series: <a href="https://es.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0)</li>
       <li>Fútbol, NBA, MLB y UFC: datos públicos de <a href="https://www.espn.com" target="_blank" rel="noopener">ESPN</a></li>
       <li>Fórmula 1: <a href="https://github.com/jolpica/jolpica-f1" target="_blank" rel="noopener">Jolpica F1</a> (Ergast)</li>
+      <li>Íconos de las páginas de lectura: DuckDuckGo</li>
     </ul>
     <p class="small muted">Código abierto con licencia MIT.</p>
   </section>`;
@@ -355,10 +414,21 @@ export function renderSettings(root) {
   $('#br-test', root).onclick = () => openUrl('https://es.wikipedia.org/wiki/Biblioteca_de_Alejandr%C3%ADa');
   $('#amoled', root).onchange = async (e) => { await setPref('amoled', e.target.checked); applyTheme(); };
   $('#motion', root).onchange = async (e) => { await setPref('motion', e.target.checked ? 'off' : 'auto'); applyTheme(); };
+  $('#haptics', root).onchange = async (e) => { await setPref('haptics', e.target.checked); applyTheme(); vibrate(15); };
+  $('#show-recs', root).onchange = async (e) => { await setPref('showRecs', e.target.checked); };
+  $('#show-clock', root).onchange = async (e) => { await setPref('showClock', e.target.checked); };
+  $('#start-tab', root).addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-start]');
+    if (!b) return;
+    await setPref('startTab', b.dataset.start);
+    $$('#start-tab button', root).forEach((x) => x.classList.toggle('on', x === b));
+    vibrate(8);
+    toast(`La app abrirá en ${b.textContent.trim()}`, { icon: '🏠' });
+  });
   root.querySelector('.pattern-list')?.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-delpat]');
     if (!b) return;
-    if (!(await confirmDialog('¿Borrar este patrón?', `La app volverá a preguntarte cuál es el número del capítulo en ${b.dataset.delpat}.`, { ok: 'Borrar', danger: true }))) return;
+    if (!(await confirmDialog('¿Olvidar esta página?', `La próxima vez que pegues un link de ${b.dataset.delpat}, la app te volverá a preguntar cuál número es el capítulo.`, { ok: 'Olvidar', danger: true }))) return;
     await deletePattern(b.dataset.delpat);
     renderSettings(root);
   });

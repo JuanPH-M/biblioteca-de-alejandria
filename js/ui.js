@@ -12,7 +12,7 @@ export function debounce(fn, ms) {
 }
 
 export function vibrate(ms = 10) {
-  try { if (!reducedMotion()) navigator.vibrate?.(ms); } catch { /* sin vibración */ }
+  try { if (!reducedMotion() && document.documentElement.dataset.haptics !== 'off') navigator.vibrate?.(ms); } catch { /* sin vibración */ }
 }
 
 // Color estable a partir de un texto (para portadas genéricas e iniciales)

@@ -157,14 +157,14 @@ const TYPE_DESC = {
 };
 
 // ---------- hoja: ¿Qué quieres agregar? ----------
-export function openAddChooser() {
+export function openAddChooser(mode = location.hash.startsWith('#/ver') ? 'ver' : 'leer') {
+  const tile = (k, i) => `<button class="add-tile type-${k}" data-add="${k}" style="--i:${i}"><span class="at-emoji">${TYPES[k].emoji}</span><b>${TYPES[k].label}</b><small>${TYPE_DESC[k]}</small></button>`;
+  const leer = `<h4 class="add-group">📖 Para leer</h4><div class="add-grid">${tile('manhwa', 0)}${tile('manga', 1)}
+      <button class="add-tile link-tile" data-act="paste" style="--i:2"><span class="at-emoji">🔗</span><b>Pegar link</b><small>De un capítulo</small></button></div>`;
+  const ver = `<h4 class="add-group">📺 Para ver</h4><div class="add-grid">${tile('anime', 3)}${tile('serie', 4)}${tile('pelicula', 5)}</div>`;
   const s = openSheet(`
     <h3 class="sheet-title center">¿Qué quieres agregar?</h3>
-    <div class="add-grid">
-      ${Object.entries(TYPES).map(([k, t], i) => `<button class="add-tile type-${k}" data-add="${k}" style="--i:${i}">
-        <span class="at-emoji">${t.emoji}</span><b>${t.label}</b><small>${TYPE_DESC[k]}</small></button>`).join('')}
-      <button class="add-tile link-tile" data-act="paste" style="--i:5"><span class="at-emoji">🔗</span><b>Pegar link</b><small>De un capítulo</small></button>
-    </div>
+    ${mode === 'ver' ? ver + leer : leer + ver}
     <a class="btn ghost block" href="#/importar" data-act="import">${ICONS.upload} Importar marcadores de Chrome</a>`, { cls: 'chooser' });
   s.el.addEventListener('click', (e) => {
     const t = e.target.closest('[data-add]');

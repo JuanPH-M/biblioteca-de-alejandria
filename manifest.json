@@ -26,6 +26,7 @@
   "shortcuts": [
     { "name": "Agregar obra", "short_name": "Agregar", "url": "./#/nuevo", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Pegar link de capítulo", "short_name": "Pegar link", "url": "./#/pegar", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Lo que veo", "short_name": "Ver", "url": "./#/ver", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Deportes", "short_name": "Deportes", "url": "./#/deportes", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

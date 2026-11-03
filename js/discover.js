@@ -10,6 +10,9 @@ const TABS = [
   ['parati', '✨', 'Para ti'], ['manhwa', '📗', 'Manhwa'], ['manga', '📕', 'Manga'], ['anime', '🌸', 'Anime'], ['serie', '📺', 'Series'], ['pelicula', '🎬', 'Películas'],
 ];
 let tab = 'parati';
+let dmode = 'leer';
+const MODE_TABS = { leer: ['parati', 'manhwa', 'manga'], ver: ['parati', 'anime', 'serie', 'pelicula'] };
+const MODE_TYPES = { leer: ['manhwa', 'manga'], ver: ['anime', 'serie', 'pelicula'] };
 let genre = null;
 const items = new Map(); // tarjetas en pantalla: clave → { r, kind }
 const keyOf = (r) => `${r.source}:${r.sourceId}`;
@@ -24,15 +27,16 @@ export function inLibrary(r) {
 // ---------- recomendaciones personales ----------
 // Se toman las obras que más te gustaron (favoritas, mejor calificadas, en curso) y se piden sus recomendaciones.
 function seeds(type = null) {
-  return S.works.filter((w) => w.source?.api === 'anilist' && (!type || w.type === type) && w.status !== 'abandonado')
+  const types = Array.isArray(type) ? type : type ? [type] : null;
+  return S.works.filter((w) => w.source?.api === 'anilist' && (!types || types.includes(w.type)) && w.status !== 'abandonado')
     .sort((a, b) => (b.favorite - a.favorite) || ((b.rating || 0) - (a.rating || 0)) || ((b.lastOpened || b.updatedAt) - (a.lastOpened || a.updatedAt)))
     .slice(0, 4);
 }
 const kindMatches = (r, kind) => (kind === 'manhwa' ? /Corea/.test(r.extra) : kind === 'manga' ? !/Corea|China/.test(r.extra) : kind === 'pelicula' ? /Película/.test(r.extra) : kind === 'anime' ? !/Película/.test(r.extra) : true);
-export async function forYou(kind = null, limit = 24) {
+export async function forYou(kind = null, limit = 24, types = null) {
   const out = new Map();
   const groups = [];
-  for (const w of seeds(kind)) {
+  for (const w of seeds(kind || types)) {
     try {
       const recs = (await aniRecommendations(w.source.id, w.type)).filter((r) => !inLibrary(r) && (!kind || kindMatches(r, kind)));
       if (recs.length) groups.push({ because: w, list: recs });
@@ -80,14 +84,18 @@ async function fill(root, id, loader, kind, { because = false, empty = '' } = {}
 
 // ======================= PANTALLA =======================
 export function renderDiscover(root, param) {
-  if (TABS.some(([k]) => k === param)) tab = param;
+  if (param === 'leer' || param === 'ver') { dmode = param; tab = 'parati'; }
+  else if (TABS.some(([k]) => k === param)) { tab = param; if (param !== 'parati') dmode = MODE_TABS.leer.includes(param) ? 'leer' : 'ver'; }
+  if (!MODE_TABS[dmode].includes(tab)) tab = 'parati';
+  const tabs = TABS.filter(([k]) => MODE_TABS[dmode].includes(k));
   root.innerHTML = `
   <header class="topbar">
-    <a href="#/" class="icon-btn" aria-label="Volver">${ICONS.back}</a>
-    <div class="grow"><h1 class="page-title">✨ Descubrir</h1><p class="sub">Recomendaciones para leer y ver</p></div>
+    <a href="${dmode === 'ver' ? '#/ver' : '#/'}" class="icon-btn" aria-label="Volver">${ICONS.back}</a>
+    <div class="grow"><h1 class="page-title">✨ Descubrir</h1><p class="sub">${dmode === 'ver' ? 'Animes, series y películas para ver' : 'Manhwas y mangas para leer'}</p></div>
     <button class="icon-btn" data-global-search aria-label="Buscar en tu biblioteca">${ICONS.search}</button>
   </header>
-  <div class="chips scroll-x dtabs" id="d-tabs">${TABS.map(([k, e, l]) => `<button class="chip ${k === tab ? 'on' : ''}" data-tab="${k}">${e} ${l}</button>`).join('')}</div>
+  <div class="seg mode-seg" id="d-mode"><button class="${dmode === 'leer' ? 'on' : ''}" data-mode="leer">📖 Para leer</button><button class="${dmode === 'ver' ? 'on' : ''}" data-mode="ver">📺 Para ver</button></div>
+  <div class="chips scroll-x dtabs" id="d-tabs">${tabs.map(([k, e, l]) => `<button class="chip ${k === tab ? 'on' : ''}" data-tab="${k}">${e} ${l}</button>`).join('')}</div>
   <div id="d-body"></div>
   <p class="attr">Datos de <a href="${ATTRIBUTION.anilist.url}" target="_blank" rel="noopener">AniList</a>, <a href="${ATTRIBUTION.tvmaze.url}" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA 4.0) y <a href="${ATTRIBUTION.wikipedia.url}" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0)</p>`;
   $('#d-tabs', root).addEventListener('click', (e) => {
@@ -98,6 +106,13 @@ export function renderDiscover(root, param) {
     history.replaceState(null, '', '#/descubrir/' + tab);
     vibrate(6);
     drawTab(root);
+  });
+  $('#d-mode', root).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mode]');
+    if (!b || b.dataset.mode === dmode) return;
+    vibrate(6);
+    history.replaceState(null, '', '#/descubrir/' + b.dataset.mode);
+    renderDiscover(root, b.dataset.mode);
   });
   $('#d-body', root).addEventListener('click', onCardClick);
   drawTab(root);
@@ -116,28 +131,32 @@ function drawTab(root) {
   items.clear();
   body.classList.remove('tab-in'); void body.offsetWidth; body.classList.add('tab-in');
   if (tab === 'parati') {
-    const hasSeeds = seeds().length > 0;
-    const serieGenres = topGenres(['serie']);
+    const leer = dmode === 'leer';
+    const hasSeeds = seeds(MODE_TYPES[dmode]).length > 0;
+    const serieGenres = leer ? [] : topGenres(['serie']);
     body.innerHTML = `
-      ${hasSeeds ? '' : '<div class="banner">💡 Agrega manhwas, mangas o animes (eligiéndolos de la búsqueda al agregarlos) y marca tus favoritos: las recomendaciones serán a tu gusto.</div>'}
+      ${hasSeeds ? '' : `<div class="banner">💡 Agrega ${leer ? 'manhwas o mangas' : 'animes'} eligiéndolos de la búsqueda al agregarlos y marca tus favoritos: las recomendaciones serán a tu gusto.</div>`}
       <div id="d-because"></div>
       ${serieGenres.length ? section('d-tvfor', '📺 Series para ti', serieGenres.slice(0, 2).join(' · ')) : ''}
-      ${section('d-trend-manhwa', '🔥 Manhwas en tendencia')}
-      ${section('d-trend-anime', '🔥 Animes en tendencia')}
-      ${section('d-trend-movies', '🎬 Películas de las que se habla')}
-      ${section('d-trend-series', '📺 Series de las que se habla')}`;
+      ${leer ? `${section('d-trend-manhwa', '🔥 Manhwas en tendencia')}${section('d-trend-manga', '🔥 Mangas en tendencia')}${section('d-new-manhwa', '🆕 Manhwas nuevos')}`
+        : `${section('d-trend-anime', '🔥 Animes en tendencia')}${section('d-trend-series', '📺 Series de las que se habla')}${section('d-trend-movies', '🎬 Películas de las que se habla')}`}`;
     (async () => {
       const box = $('#d-because', body);
-      const { groups } = await forYou();
+      const { groups } = await forYou(null, 24, MODE_TYPES[dmode]);
       if (!box.isConnected) return;
       box.innerHTML = groups.slice(0, 4).map((g, gi) => `<section class="dsec"><div class="sec-head"><h2>Porque te gustó <em>${esc(g.because.title)}</em></h2></div>
         <div class="drow">${g.list.slice(0, 12).map((r, i) => cardHTML(r, g.because.type === 'anime' && /Película/.test(r.extra) ? 'pelicula' : g.because.type, i + gi)).join('')}</div></section>`).join('');
     })();
     if (serieGenres.length) fill(body, 'd-tvfor', async () => (await tvByGenres(serieGenres)).filter((r) => !inLibrary(r)).slice(0, 20), 'serie');
-    fill(body, 'd-trend-manhwa', () => discoverAniList('manhwa', 'trending'), 'manhwa');
-    fill(body, 'd-trend-anime', () => discoverAniList('anime', 'trending'), 'anime');
-    fill(body, 'd-trend-movies', () => wikiTrending('pelicula'), 'pelicula');
-    fill(body, 'd-trend-series', () => wikiTrending('serie'), 'serie');
+    if (leer) {
+      fill(body, 'd-trend-manhwa', () => discoverAniList('manhwa', 'trending'), 'manhwa');
+      fill(body, 'd-trend-manga', () => discoverAniList('manga', 'trending'), 'manga');
+      fill(body, 'd-new-manhwa', () => discoverAniList('manhwa', 'new'), 'manhwa');
+    } else {
+      fill(body, 'd-trend-anime', () => discoverAniList('anime', 'trending'), 'anime');
+      fill(body, 'd-trend-series', () => wikiTrending('serie'), 'serie');
+      fill(body, 'd-trend-movies', () => wikiTrending('pelicula'), 'pelicula');
+    }
     return;
   }
   if (['manhwa', 'manga', 'anime'].includes(tab)) {
@@ -238,13 +257,16 @@ export function openPreview(r, kind) {
 }
 
 // ---------- recomendaciones cortas (inicio y "¿Qué sigue?") ----------
-export async function quickPicks(limit = 12) {
-  const { flat } = await forYou(null, limit);
+export async function quickPicks(limit = 12, mode = 'leer') {
+  const { flat } = await forYou(null, limit, MODE_TYPES[mode]);
   if (flat.length >= 4) return flat;
-  // sin obras de AniList todavía: tendencias
-  const [m, a] = await Promise.all([discoverAniList('manhwa', 'trending').catch(() => []), discoverAniList('anime', 'trending').catch(() => [])]);
+  // todavía sin obras para recomendar a tu gusto: tendencias
+  const [a, b] = mode === 'leer'
+    ? await Promise.all([discoverAniList('manhwa', 'trending').catch(() => []), discoverAniList('manga', 'trending').catch(() => [])])
+    : await Promise.all([discoverAniList('anime', 'trending').catch(() => []), discoverTV('popular').catch(() => [])]);
+  const [ka, kb] = mode === 'leer' ? ['manhwa', 'manga'] : ['anime', 'serie'];
   const mix = [];
-  for (let i = 0; i < 8; i++) { if (m[i]) mix.push({ r: m[i], kind: 'manhwa' }); if (a[i]) mix.push({ r: a[i], kind: 'anime' }); }
+  for (let i = 0; i < 8; i++) { if (a[i]) mix.push({ r: a[i], kind: ka }); if (b[i]) mix.push({ r: b[i], kind: kb }); }
   return [...flat, ...mix.filter((x) => !inLibrary(x.r))].slice(0, limit);
 }
 export function picksHTML(list, because = true) {

@@ -4,12 +4,13 @@ import { S, TYPES, STATUSES, statusLabel, statusHint, loadAll, saveWork, deleteW
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeShow, tvmazeFind, wikidataIdFor, wikidataCast, pubStatusEs } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
-import { renderPlatforms, renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp } from './sections.js';
-import { renderSports } from './sports.js';
-import { renderDiscover, quickPicks, picksHTML, onPickClick } from './discover.js';
+import { renderPlatform, renderStats, renderSettings, renderImport, todayCount, isIOS, isStandalone, openInstallHelp, readPlacesHTML, watchPlacesHTML, bindPlaces } from './sections.js';
+// Deportes y Descubrir se cargan solo cuando se usan: la app abre más rápido
+const loadDiscover = () => import('./discover.js');
+const loadSports = () => import('./sports.js');
 
 const view = $('#view');
-export const APP_VERSION = '2.5.0';
+export const APP_VERSION = '2.6.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -55,9 +56,11 @@ export async function render({ keepScroll = false } = {}) {
   const changed = routeKey !== lastRoute;
   const scrollY = window.scrollY;
   lastRoute = routeKey;
+  if (r.name === 'plataformas') { history.replaceState(null, '', '#/ver'); r.name = 'ver'; }
   const map = {
-    home: renderHome, obra: (el) => renderDetail(el, r.param), plataformas: renderPlatforms, plataforma: (el) => renderPlatform(el, r.param),
-    descubrir: (el) => renderDiscover(el, r.param), deportes: (el) => renderSports(el, r.param), futbol: (el) => renderSports(el, 'futbol', r.param), stats: renderStats, ajustes: renderSettings, importar: renderImport,
+    home: (el) => renderHome(el, 'leer'), ver: (el) => renderHome(el, 'ver'), obra: (el) => renderDetail(el, r.param), plataforma: (el) => renderPlatform(el, r.param),
+    descubrir: async (el) => (await loadDiscover()).renderDiscover(el, r.param), deportes: async (el) => (await loadSports()).renderSports(el, r.param), futbol: async (el) => (await loadSports()).renderSports(el, 'futbol', r.param),
+    stats: renderStats, ajustes: renderSettings, importar: renderImport,
   };
   const fn = map[r.name] || renderHome;
   const update = async () => {
@@ -81,10 +84,47 @@ export async function render({ keepScroll = false } = {}) {
     await update();
     if (changed) { void view.offsetWidth; view.classList.add('view-enter'); }
   }
-  const tab = { home: 'home', obra: 'home', descubrir: 'home', plataformas: 'plataformas', plataforma: 'plataformas', futbol: 'deportes', deportes: 'deportes', stats: 'stats', ajustes: 'stats', importar: 'stats' }[r.name] || 'home';
-  $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
+  $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tabFor(r)));
+}
+// Qué pestaña de abajo queda marcada en cada pantalla
+function tabFor(r) {
+  if (r.name === 'obra') { const w = getWork(r.param); return w && !TYPES[w.type]?.reading ? 'ver' : 'home'; }
+  if (r.name === 'descubrir') return /^(ver|anime|serie|pelicula)$/.test(r.param || '') ? 'ver' : 'home';
+  if (r.name === 'plataforma') return (r.param || '').startsWith('sitio:') ? 'home' : 'ver';
+  return { home: 'home', ver: 'ver', futbol: 'deportes', deportes: 'deportes', stats: 'ajustes', ajustes: 'ajustes', importar: 'ajustes' }[r.name] || 'home';
 }
 window.addEventListener('hashchange', () => render());
+// Con el teclado abierto: las ventanas usan solo el espacio visible y el campo que escribes
+// sube para que las sugerencias de abajo se vean
+(() => {
+  const vv = window.visualViewport;
+  const d = document.documentElement;
+  const sync = () => {
+    if (!vv) return;
+    d.style.setProperty('--vvh', vv.height + 'px');
+    d.style.setProperty('--vvt', vv.offsetTop + 'px');
+    d.classList.toggle('kb-open', window.innerHeight - vv.height > 140);
+  };
+  vv?.addEventListener('resize', sync);
+  vv?.addEventListener('scroll', sync);
+  sync();
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!el.matches?.('input[type="search"], input[type="text"], input[type="url"], input:not([type]), textarea')) return;
+    setTimeout(() => {
+      const box = el.closest('.sheet-body');
+      if (box) {
+        // dentro de una ventana: el campo queda arriba y los resultados debajo, a la vista
+        const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12;
+        box.scrollTo({ top: Math.max(0, top), behavior: reducedMotion() ? 'auto' : 'smooth' });
+      } else if (el.id === 'q') {
+        // buscador del inicio: sube hasta arriba para que la lista de sugerencias quepa
+        const y = el.getBoundingClientRect().top + window.scrollY - 70;
+        window.scrollTo({ top: Math.max(0, y), behavior: reducedMotion() ? 'auto' : 'smooth' });
+      }
+    }, 320);
+  });
+})();
 document.addEventListener('click', (e) => { if (e.target.closest('[data-global-search]')) openSearchSheet(); });
 // Tocar la pestaña en la que ya estás te sube al inicio (o vuelve a la pantalla principal de esa pestaña)
 document.querySelector('.tabbar')?.addEventListener('click', (e) => {
@@ -133,11 +173,19 @@ function finishPrompt(w) {
   });
 }
 
-// ---------- biblioteca ----------
+// ---------- biblioteca: Lectura (manhwa y manga) y Ver (anime, series y películas) ----------
+export const MODES = {
+  leer: { label: 'Lectura', emoji: '📖', types: ['manhwa', 'manga'], verb: 'leer', hash: '#/' },
+  ver: { label: 'Ver', emoji: '📺', types: ['anime', 'serie', 'pelicula'], verb: 'ver', hash: '#/ver' },
+};
+let MODE = 'leer';
+const emptyFilters = () => ({ q: '', type: 'all', status: 'all', platform: 'all', fav: false });
+const FILTERS = { leer: S.filters, ver: emptyFilters() };
+const modeWorks = (m = MODE) => S.works.filter((w) => MODES[m].types.includes(w.type));
 // Última vez que avanzaste o abriste el link (si nunca, la última edición)
 const lastTouch = (w) => Math.max(w.lastRead || 0, w.lastOpened || 0) || w.updatedAt || 0;
 function continueList() {
-  return S.works.filter((w) => ['viendo', 'emision'].includes(w.status)).sort((a, b) => lastTouch(b) - lastTouch(a)).slice(0, 12);
+  return modeWorks().filter((w) => ['viendo', 'emision'].includes(w.status)).sort((a, b) => lastTouch(b) - lastTouch(a)).slice(0, 12);
 }
 
 let greeted = false;
@@ -145,11 +193,15 @@ let greeted = false;
 const clockText = () => { const d = new Date(); const t = d.toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); return t.charAt(0).toUpperCase() + t.slice(1); };
 setInterval(() => { const c = document.getElementById('clock'); if (c) c.textContent = clockText(); }, 20000);
 const showInstallHint = () => !isStandalone() && (isIOS() || installPrompt) && !(S.settings.installHint > Date.now() - 30 * 864e5);
-async function renderHome(root) {
+async function renderHome(root, mode = 'leer') {
+  MODE = mode;
+  S.filters = FILTERS[mode];
+  const M = MODES[mode];
   const f = S.filters;
-  const total = S.works.length;
+  const mine = modeWorks();
+  const total = mine.length;
   const backupDays = S.settings.lastBackup ? Math.floor((Date.now() - S.settings.lastBackup) / 864e5) : null;
-  const showBackup = total >= 3 && (backupDays == null || backupDays > 14) && !(S.settings.backupSnooze > Date.now());
+  const showBackup = S.works.length >= 3 && (backupDays == null || backupDays > 14) && !(S.settings.backupSnooze > Date.now());
   const cont = continueList();
   const [, ...rest] = cont;
   const spotPool = spotlightPool(cont);
@@ -161,16 +213,16 @@ async function renderHome(root) {
   <header class="topbar">
     <div class="brand">
       <a href="#/" class="brand-logo" id="brand-logo" aria-label="Ir al inicio"><img src="icons/icon.svg" alt="" width="38" height="38"></a>
-      <div class="brand-text"><h1 class="brand-title ${greeted ? '' : 'greeting'}" id="brand-title">${greeted ? 'Biblioteca de Alejandría' : `${hello} <span class="wave">👋</span>`}</h1><p class="sub">${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}</p><p class="clock" id="clock">${clockText()}</p></div>
+      <div class="brand-text"><h1 class="brand-title ${greeted ? '' : 'greeting'}" id="brand-title">${greeted ? 'Biblioteca de Alejandría' : `${hello} <span class="wave">👋</span>`}</h1><p class="sub"><span class="mode-pill">${M.emoji} ${M.label}</span> ${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}</p>${S.settings.showClock !== false ? `<p class="clock" id="clock">${clockText()}</p>` : ''}</div>
     </div>
-    <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
+    <a href="${mode === 'leer' ? '#/ver' : '#/'}" class="mode-switch" aria-label="${mode === 'leer' ? 'Ir a lo que ves' : 'Ir a lo que lees'}"><span>${mode === 'leer' ? '📺' : '📖'}</span><small>${mode === 'leer' ? 'Ver' : 'Leer'}</small></a>
   </header>
   ${showInstallHint() ? `<div class="banner install-hint"><span>📲 Instala la app en tu ${isIOS() ? 'iPhone' : 'teléfono'} para usarla a pantalla completa.</span><button class="btn sm" id="ih-how">Cómo</button><button class="icon-btn xs" id="ih-x" aria-label="Ocultar">${ICONS.close}</button></div>` : ''}
   ${showBackup ? `<div class="banner warn"><span>💾 ${backupDays == null ? 'Aún no has hecho un respaldo.' : `Tu último respaldo fue ${relTime(S.settings.lastBackup)}.`}</span><a href="#/ajustes" class="btn sm">Respaldar</a></div>` : ''}
   <div class="search-wrap">
     <div class="searchbar">
       <span class="ic">${ICONS.search}</span>
-      <input id="q" type="search" placeholder="Buscar en tu biblioteca…" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="suggest">
+      <input id="q" type="search" placeholder="${mode === 'leer' ? 'Buscar en lo que lees…' : 'Buscar en lo que ves…'}" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="suggest">
       <button class="icon-btn xs q-clear ${f.q ? '' : 'hidden'}" id="q-clear" aria-label="Borrar búsqueda">${ICONS.close}</button>
       <button class="paste-btn" id="paste-btn">${ICONS.link}<span>Pegar link</span></button>
     </div>
@@ -178,8 +230,8 @@ async function renderHome(root) {
   </div>
   ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="tablist" aria-label="Obras destacadas">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${i}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}</div>` : ''}</div>` : ''}
   ${!f.q ? `<div class="pick-row ${total >= 2 ? '' : 'solo'}">
-    ${total >= 2 ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>La suerte elige qué seguir</small></span></button>` : ''}
-    <a class="next-pick disc" href="#/descubrir"><span class="dice">✨</span><span><b>Descubrir</b><small>Recomendaciones nuevas y clásicas</small></span></a>
+    ${total >= 2 ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>La suerte elige qué ${M.verb}</small></span></button>` : ''}
+    <a class="next-pick disc" href="#/descubrir/${mode}"><span class="dice">✨</span><span><b>Descubrir</b><small>${mode === 'leer' ? 'Manhwas y mangas para ti' : 'Animes, series y películas'}</small></span></a>
   </div>` : ''}
   ${rest.length && !f.q ? `
   <section class="continue">
@@ -194,25 +246,26 @@ async function renderHome(root) {
         </div>`; }).join('')}
     </div>
   </section>` : ''}
-  ${!f.q ? `<section class="continue" id="for-you-sec">
-    <div class="sec-head"><h2>✨ Te puede gustar</h2><a href="#/descubrir" class="link-btn small">Ver más</a></div>
+  ${!f.q ? (mode === 'leer' ? readPlacesHTML() : watchPlacesHTML()) : ''}
+  ${!f.q && S.settings.showRecs !== false ? `<section class="continue" id="for-you-sec">
+    <div class="sec-head"><h2>✨ Te puede gustar</h2><a href="#/descubrir/${mode}" class="link-btn small">Ver más</a></div>
     <div class="drow" id="for-you">${Array.from({ length: 4 }, (_, i) => `<div class="dcard skel" style="--i:${i}"><span class="dcover"></span><b></b><small></small></div>`).join('')}</div>
   </section>` : ''}
   <div class="${total ? '' : 'hidden'}">
   <div class="sec-head types-head"><h2>Explorar</h2></div>
   <div class="type-cards" id="type-chips" role="tablist">
-    ${[['all', '✨', 'Todo'], ...Object.entries(TYPES).map(([k, t]) => [k, t.emoji, t.label])].map(([k, emo, l], i) => `<button class="tcard type-${k} ${f.type === k ? 'on' : ''}" data-type="${k}" role="tab" aria-selected="${f.type === k}" style="--i:${i}">
-      <span class="tc-emoji">${emo}</span><span class="tc-label">${l}</span><span class="tc-count">${((n) => `${n} ${n === 1 ? 'obra' : 'obras'}`)(k === 'all' ? total : S.works.filter((w) => w.type === k).length)}</span></button>`).join('')}
+    ${[['all', M.emoji, 'Todo'], ...M.types.map((k) => [k, TYPES[k].emoji, TYPES[k].label])].map(([k, emo, l], i) => `<button class="tcard type-${k} ${f.type === k ? 'on' : ''}" data-type="${k}" role="tab" aria-selected="${f.type === k}" style="--i:${i}">
+      <span class="tc-emoji">${emo}</span><span class="tc-label">${l}</span><span class="tc-count">${((n) => `${n} ${n === 1 ? 'obra' : 'obras'}`)(k === 'all' ? total : mine.filter((w) => w.type === k).length)}</span></button>`).join('')}
   </div>
   <div class="filter-row">
     <label class="select"><select id="f-status" aria-label="Estado">
       <option value="all">Todos los estados</option>
       ${Object.entries(STATUSES).map(([k, s]) => `<option value="${k}" ${f.status === k ? 'selected' : ''}>${s.label}</option>`).join('')}
     </select></label>
-    <label class="select"><select id="f-platform" aria-label="Plataforma">
+    ${mode === 'ver' ? `<label class="select"><select id="f-platform" aria-label="Plataforma">
       <option value="all">Todas las plataformas</option>
-      ${Object.entries(PLATFORMS).map(([k, p]) => `<option value="${k}" ${f.platform === k ? 'selected' : ''}>${p.name}</option>`).join('')}
-    </select></label>
+      ${STREAMING.map((k) => `<option value="${k}" ${f.platform === k ? 'selected' : ''}>${PLATFORMS[k].name}</option>`).join('')}
+    </select></label>` : ''}
     <button class="icon-btn sm ${f.fav ? 'on-fav' : ''}" id="f-fav" aria-pressed="${f.fav}" aria-label="Solo favoritos">${ICONS.heart}</button>
     <label class="select compact"><select id="f-sort" aria-label="Ordenar">
       ${[['updated', 'Recientes'], ['title', 'A–Z'], ['rating', 'Mejor calificadas'], ['added', 'Agregadas']].map(([k, l]) => `<option value="${k}" ${S.settings.sort === k ? 'selected' : ''}>${l}</option>`).join('')}
@@ -229,7 +282,7 @@ async function renderHome(root) {
     const v = q.value.trim();
     $('#q-clear', root).classList.toggle('hidden', !v);
     if (!v) { sug.hidden = true; q.setAttribute('aria-expanded', 'false'); return; }
-    const found = searchWorks(v, 6);
+    const found = searchWorks(v, 6, modeWorks());
     const all = filteredWorks().length;
     sug.innerHTML = (found.length ? found.map((w, i) => `<button class="sg-item" role="option" data-open-work="${w.id}" style="--i:${i}">
         ${coverHTML(w, 'xs')}
@@ -267,7 +320,7 @@ async function renderHome(root) {
     renderGrid();
   });
   $('#f-status', root).onchange = (e) => { f.status = e.target.value; renderGrid(); };
-  $('#f-platform', root).onchange = (e) => { f.platform = e.target.value; renderGrid(); };
+  $('#f-platform', root)?.addEventListener('change', (e) => { f.platform = e.target.value; renderGrid(); });
   $('#f-sort', root).onchange = async (e) => { await setPref('sort', e.target.value); renderGrid(); };
   $('#f-fav', root).onclick = (e) => { f.fav = !f.fav; e.currentTarget.classList.toggle('on-fav', f.fav); e.currentTarget.setAttribute('aria-pressed', f.fav); renderGrid(); };
   $('#f-view', root).onclick = async (e) => {
@@ -291,15 +344,17 @@ async function renderHome(root) {
   root.addEventListener('click', onContinueClick);
   root.addEventListener('click', onCardClick);
   if (spot && !f.q) startSpotRotation(root, spotPool);
-  $('#next-pick', root)?.addEventListener('click', openRoulette);
+  $('#next-pick', root)?.addEventListener('click', () => openRoulette(mode));
+  bindPlaces(root);
   // el logo vuelve al inicio: limpia la búsqueda y sube
   $('#brand-logo', root)?.addEventListener('click', (e) => {
     e.preventDefault();
     vibrate(8);
     const logo = e.currentTarget;
     logo.classList.remove('spin'); void logo.offsetWidth; logo.classList.add('spin');
+    if (location.hash !== M.hash && !(mode === 'leer' && !location.hash)) { go(M.hash); return; }
     if (S.filters.q || S.filters.type !== 'all' || S.filters.status !== 'all' || S.filters.platform !== 'all' || S.filters.fav) {
-      Object.assign(S.filters, { q: '', type: 'all', status: 'all', platform: 'all', fav: false });
+      Object.assign(S.filters, emptyFilters());
       render();
     }
     window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
@@ -307,10 +362,12 @@ async function renderHome(root) {
   // recomendaciones en el inicio
   const fy = $('#for-you', root);
   if (fy) {
-    fy.addEventListener('click', onPickClick);
-    quickPicks(12).then((list) => {
-      if (!fy.isConnected) return;
-      if (list.length) fy.innerHTML = picksHTML(list); else $('#for-you-sec', root)?.remove();
+    loadDiscover().then((D) => {
+      fy.addEventListener('click', D.onPickClick);
+      return D.quickPicks(12, mode).then((list) => {
+        if (!fy.isConnected) return;
+        if (list.length) fy.innerHTML = D.picksHTML(list); else $('#for-you-sec', root)?.remove();
+      });
     }).catch(() => $('#for-you-sec', root)?.remove());
   }
   // al volver del detalle, la portada regresa a su tarjeta
@@ -391,11 +448,11 @@ function spotlightPool(cont) {
   const add = (w, why) => { if (w && !seen.has(w.id)) { seen.add(w.id); out.push({ ...w, _why: why }); } };
   const DAY = 864e5;
   cont.filter((w) => Date.now() - lastTouch(w) <= 5 * DAY).slice(0, 2).forEach((w) => add(w, 'recent'));
-  S.works.filter((w) => ['viendo', 'emision', 'pausado'].includes(w.status) && Date.now() - lastTouch(w) > 5 * DAY)
+  modeWorks().filter((w) => ['viendo', 'emision', 'pausado'].includes(w.status) && Date.now() - lastTouch(w) > 5 * DAY)
     .sort((a, b) => lastTouch(a) - lastTouch(b)).slice(0, 2).forEach((w) => add(w, 'stale'));
-  const pend = S.works.filter((w) => w.status === 'pendiente').sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const pend = modeWorks().filter((w) => w.status === 'pendiente').sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   add(pend[0], 'pending');
-  add(S.works.filter((w) => w.favorite && !['terminado', 'abandonado'].includes(w.status)).sort((a, b) => lastTouch(a) - lastTouch(b))[0], 'fav');
+  add(modeWorks().filter((w) => w.favorite && !['terminado', 'abandonado'].includes(w.status)).sort((a, b) => lastTouch(a) - lastTouch(b))[0], 'fav');
   cont.slice(2).forEach((w) => { if (out.length < 6) add(w, 'recent'); });
   return out.slice(0, 6);
 }
@@ -463,20 +520,23 @@ export function openSearchSheet() {
 }
 
 // ---------- ¿Qué sigue? (ruleta) ----------
-function openRoulette() {
-  const pool = (kind) => S.works.filter((w) => ['pendiente', 'viendo', 'emision', 'pausado'].includes(w.status) && (kind === 'all' || (kind === 'leer' ? TYPES[w.type].reading : !TYPES[w.type].reading)));
+function openRoulette(mode = MODE) {
+  const types = MODES[mode].types;
+  const pool = (kind) => S.works.filter((w) => ['pendiente', 'viendo', 'emision', 'pausado'].includes(w.status) && types.includes(w.type) && (kind === 'all' || w.type === kind));
   let kind = 'all';
-  const s = openSheet(`<h3 class="sheet-title center">🎲 ¿Qué sigue?</h3>
-    <div class="seg mini3" id="rl-kind"><button class="on" data-k="all">Todo</button><button data-k="leer">Leer</button><button data-k="ver">Ver</button></div>
+  const s = openSheet(`<h3 class="sheet-title center">🎲 ¿Qué ${mode === 'leer' ? 'leo' : 'veo'} ahora?</h3>
+    <div class="seg mini3" id="rl-kind"><button class="on" data-k="all">Todo</button>${types.map((k) => `<button data-k="${k}">${TYPES[k].label}</button>`).join('')}</div>
     <div class="slot"><div class="slot-reel" id="rl-reel"></div><div class="slot-glow"></div></div>
     <div class="rl-result" id="rl-result"><p class="muted small center">Toca girar y deja que la suerte decida.</p></div>
     <div class="row-btns"><button class="btn primary lg" id="rl-spin">🎰 Girar</button></div>
     <div class="rl-new"><div class="sec-head"><h4>✨ O prueba algo nuevo</h4><a href="#/descubrir" class="link-btn small" id="rl-more">Ver más</a></div>
       <div class="drow" id="rl-picks">${Array.from({ length: 3 }, (_, i) => `<div class="dcard skel" style="--i:${i}"><span class="dcover"></span><b></b><small></small></div>`).join('')}</div></div>`, { cls: 'roulette' });
   const rp = $('#rl-picks', s.el);
-  rp.addEventListener('click', onPickClick);
-  $('#rl-more', s.el).addEventListener('click', (e) => { e.preventDefault(); s.close(); whenSettled(() => go('#/descubrir')); });
-  quickPicks(10).then((list) => { if (rp.isConnected) rp.innerHTML = list.length ? picksHTML(list) : '<p class="muted small">Sin recomendaciones por ahora.</p>'; }).catch(() => { if (rp.isConnected) rp.innerHTML = '<p class="muted small">Sin conexión.</p>'; });
+  $('#rl-more', s.el).addEventListener('click', (e) => { e.preventDefault(); s.close(); whenSettled(() => go('#/descubrir/' + mode)); });
+  loadDiscover().then((D) => {
+    rp.addEventListener('click', D.onPickClick);
+    return D.quickPicks(10, mode).then((list) => { if (rp.isConnected) rp.innerHTML = list.length ? D.picksHTML(list) : '<p class="muted small">Sin recomendaciones por ahora.</p>'; });
+  }).catch(() => { if (rp.isConnected) rp.innerHTML = '<p class="muted small">Sin conexión.</p>'; });
   const reel = $('#rl-reel', s.el), result = $('#rl-result', s.el);
   const H = 186;
   let spinning = false;
@@ -590,28 +650,29 @@ setBrowserPicker((url, onOpen) => {
 function renderGrid() {
   const grid = $('#grid');
   if (!grid) return;
-  const list = filteredWorks();
+  const list = filteredWorks(modeWorks());
   grid.className = S.settings.view === 'list' ? 'grid list' : 'grid';
-  if (!S.works.length) {
+  if (!modeWorks().length) {
+    const leer = MODE === 'leer';
     grid.className = '';
     grid.innerHTML = `<div class="empty">
-      <div class="empty-art">${['📗', '🌸', '📺', '🎬'].map((e, i) => `<span style="--i:${i}">${e}</span>`).join('')}</div>
-      <h2>Tu biblioteca está vacía</h2>
-      <p class="muted">Agrega tu primera obra, pega el link de un capítulo o importa tus marcadores de Chrome.</p>
+      <div class="empty-art">${(leer ? ['📗', '📕', '📖'] : ['🌸', '📺', '🎬']).map((e, i) => `<span style="--i:${i}">${e}</span>`).join('')}</div>
+      <h2>${leer ? 'Aún no tienes nada para leer' : 'Aún no tienes nada para ver'}</h2>
+      <p class="muted">${leer ? 'Agrega un manhwa o manga, o pega el link del capítulo que estás leyendo.' : 'Agrega un anime, serie o película y elige en qué plataforma la ves.'}</p>
       <div class="col-btns">
-        <button class="btn primary" id="e-add">${ICONS.plus} Agregar obra</button>
-        <button class="btn" id="e-paste">${ICONS.link} Pegar link de capítulo</button>
-        <a class="btn ghost" href="#/importar">${ICONS.upload} Importar marcadores</a>
-        <a class="btn ghost" href="#/descubrir">✨ Descubrir qué leer o ver</a>
+        <button class="btn primary" id="e-add">${ICONS.plus} ${leer ? 'Agregar manhwa o manga' : 'Agregar anime, serie o película'}</button>
+        ${leer ? `<button class="btn" id="e-paste">${ICONS.link} Pegar link de capítulo</button>
+        <a class="btn ghost" href="#/importar">${ICONS.upload} Importar marcadores</a>` : ''}
+        <a class="btn ghost" href="#/descubrir/${MODE}">✨ Descubrir qué ${leer ? 'leer' : 'ver'}</a>
       </div></div>`;
-    $('#e-add').onclick = () => openAddChooser();
-    $('#e-paste').onclick = () => openPasteSheet();
+    $('#e-add').onclick = () => openAddChooser(MODE);
+    $('#e-paste')?.addEventListener('click', () => openPasteSheet());
     return;
   }
   if (!list.length) {
     grid.className = '';
     grid.innerHTML = `<div class="empty small"><h3>Sin resultados</h3><p class="muted">Prueba con otro nombre o quita filtros.</p><button class="btn ghost" id="clear-f">Quitar filtros</button></div>`;
-    $('#clear-f').onclick = () => { Object.assign(S.filters, { q: '', type: 'all', status: 'all', platform: 'all', fav: false }); render(); };
+    $('#clear-f').onclick = () => { Object.assign(S.filters, emptyFilters()); render(); };
     return;
   }
   grid.innerHTML = list.map((w, i) => cardHTML(w, i)).join('');
@@ -1018,7 +1079,7 @@ async function renderDetail(root, id) {
   tilt($('#hero-cover', root), 16);
   lastDetailId = w.id;
   if (document.startViewTransition) $('#hero-cover .cover', root).style.viewTransitionName = 'vt-cover';
-  $('#back', root).onclick = () => (history.length > 1 && lastRouteWasInternal ? history.back() : go('#/'));
+  $('#back', root).onclick = () => (history.length > 1 && lastRouteWasInternal ? history.back() : go(TYPES[w.type].reading ? '#/' : '#/ver'));
   $('#edit', root).onclick = () => openEditor(w);
   $('#d-search', root).onclick = () => openSearchSheet();
   $('#fav', root).onclick = async (e) => {
@@ -1363,6 +1424,7 @@ function applyTheme() {
   d.dataset.accent = S.settings.accent || 'violet';
   d.dataset.amoled = S.settings.amoled ? '1' : '0';
   d.dataset.motion = S.settings.motion === 'off' ? 'off' : 'auto';
+  d.dataset.haptics = S.settings.haptics === false ? 'off' : 'on';
 }
 export { applyTheme };
 
@@ -1386,6 +1448,10 @@ async function start() {
     toast('No se pudo abrir la base de datos local. ¿Estás en modo incógnito?', { timeout: 8000 });
   }
   applyTheme();
+  // pantalla con la que abre la app (Ajustes → Inicio)
+  if ((!location.hash || location.hash === '#' || location.hash === '#/') && S.settings.startTab && S.settings.startTab !== 'leer') {
+    history.replaceState(null, '', S.settings.startTab === 'ver' ? '#/ver' : '#/deportes');
+  }
   $('#fab').onclick = () => { vibrate(10); openAddChooser(); };
   await render();
   setTimeout(() => $('#splash')?.classList.add('hide'), reducedMotion() ? 0 : 350);

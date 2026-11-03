@@ -74,6 +74,9 @@ También puedes **pegar el link de un capítulo nuevo** (botón *Pegar link* arr
 | `manhwaweb.com/leer/{nombre}-_{id}-{N}_{sufijo}` | probable capítulo N (tú lo confirmas una vez) |
 | `olympusxyz.com/series/comic-{nombre}/capitulo/{número}` | nombre y capítulo; arma el siguiente y el anterior, y **Ver capítulos** abre la página de la serie |
 | `olympusxyz.com/capitulo/{id}/{nombre}` | nombre y link; el número es interno, capítulo manual. Botones **Ver capítulos** (lista de la serie) y **Último visto** |
+| `imperiomanhwa.com/manga/{código}/capitulo-{N}/` | capítulo N (el nombre lo escribes tú la primera vez, porque el link trae un código); arma el siguiente y el anterior |
+| `richtoon.top/manga/{nombre}/capitulo-{N}` | nombre y capítulo; siguiente y anterior |
+| Cualquier página con `/manga/{nombre}/capitulo-{N}` | nombre y capítulo, sin tener que enseñarle nada |
 | Sitios nuevos | te muestra los números del link para que toques el del capítulo y recuerda el patrón |
 | Cualquier sitio sin capítulo siguiente | botón **📚 Ver capítulos**: la app deduce sola la página con todos los capítulos de la obra (y si no puede, la busca dentro del sitio) |
 
@@ -81,32 +84,32 @@ Si en algún sitio **Ver capítulos** abre una página equivocada, toca *¿No es
 
 En Android, con la app instalada, también puedes usar **Compartir → Alejandría** desde Chrome.
 
-### 4. Pantalla de inicio
-- **Saludo** al abrir y luego el nombre de la app.
-- **Buscador inteligente**: mientras escribes muestra sugerencias con portada de lo que más se parece (aunque escribas con errores, p. ej. *"solo levlng"*). Toca una para abrirla, o *＋ Agregar* si no la tienes.
-- **🔎 Buscar desde cualquier pantalla**: dentro de una obra, en Plataformas, Estadísticas y Descubrir hay una lupa para saltar a otra obra.
-- **Logo**: tocar el logo del inicio te sube arriba y quita la búsqueda y los filtros.
-- **Tarjeta destacada** que **cambia sola cada 5 segundos**: lo último que estás siguiendo, lo que **llevas días sin leer o ver**, algún **pendiente** y alguna **favorita**, cada una con su motivo. También puedes deslizarla o tocar los puntos, y se abre al tocarla en cualquier parte.
-- **🎲 ¿Qué sigue?**: una ruleta que elige al azar qué leer o ver, y debajo recomendaciones de obras nuevas para ti.
-- **✨ Descubrir** y **Te puede gustar**: recomendaciones (ver abajo).
+### 4. Lectura y Ver
+La app está separada en dos pestañas abajo:
+- **📖 Lectura**: tus manhwas y mangas.
+- **📺 Ver**: tus animes, series y películas.
+
+Las dos tienen lo mismo, cada una con lo suyo:
+- **Buscador** propio con sugerencias de lo que más se parece (aunque escribas con errores, p. ej. *"solo levlng"*). Al tocarlo, el buscador sube para que el teclado no tape las sugerencias.
+- **Tarjeta destacada** que **cambia sola cada 5 segundos**: lo último que sigues, lo que **llevas días sin leer o ver**, algún **pendiente** y alguna **favorita**, cada una con su motivo. Se puede deslizar y se abre al tocarla en cualquier parte.
+- **🎲 ¿Qué sigue?** (ruleta) y **✨ Descubrir** con recomendaciones de ese tipo.
 - **Continuar**: carrusel con lo que tienes en curso.
-- **Explorar**: tarjetas grandes por tipo (Todo, Manhwa, Manga, Anime, Serie, Película) y filtros por estado, plataforma y favoritos, buscador y orden.
+- **✨ Te puede gustar**: recomendaciones a tu gusto.
+- **Explorar**: tarjetas por tipo y filtros por estado, favoritos y orden (en Ver, también por plataforma).
+
+Además:
+- En **Lectura**, **📚 Dónde lees**: cada página donde lees, con su logo, cuántas obras tienes ahí y un botón **Abrir página** que te lleva a su inicio. Si una página tiene varios dominios (por ejemplo r1 y r2 de RichToon), sale una sola vez. Debajo está la lista de **páginas que la app ya reconoce**.
+- En **Ver**, **📺 Dónde ves**: un recuadro por plataforma de streaming (Netflix, Prime Video, Disney+, HBO Max, Apple TV+, Paramount+, Crunchyroll, YouTube, ViX, Pluto TV y MUBI) con portadas, cuántas obras tienes y su estado.
+- Arriba a la derecha hay un botón para saltar entre Lectura y Ver, y tocar el **logo** te sube y quita la búsqueda y los filtros.
+- **🔎 Buscar desde cualquier pantalla**: dentro de una obra, en Descubrir y en Ajustes hay una lupa para saltar a otra obra.
 - **Mantén presionada una tarjeta** para acciones rápidas: cambiar estado, favorito, editar, siguiente o último capítulo.
 
-### 4b. Descubrir (recomendaciones)
-Toca **✨ Descubrir** en el inicio. Hay pestañas **Para ti, Manhwa, Manga, Anime, Series y Películas**:
-- **Para ti / Porque te gustó…**: recomendaciones a partir de tus favoritas y de lo que sigues (las obras que agregaste eligiéndolas de la búsqueda).
-- **En tendencia, Nuevos y Clásicos imprescindibles** de manhwa, manga y anime, y **por género** (acción, romance, fantasía…).
-- **Series**: para ti según tus géneros, las de las que se habla, nuevas, las más seguidas y las mejor calificadas.
-- **Películas**: las de las que se habla y películas de anime populares, nuevas y clásicas.
+### 5. Descubrir (recomendaciones)
+Toca **✨ Descubrir**. Arriba eliges **Para leer** o **Para ver**:
+- **Para leer**: Para ti, Manhwa y Manga. **Para ver**: Para ti, Anime, Series y Películas.
+- **Porque te gustó…**: recomendaciones a partir de tus favoritas y de lo que sigues (las obras que agregaste eligiéndolas de la búsqueda).
+- **En tendencia, Nuevos y Clásicos imprescindibles**, y **por género** (acción, romance, fantasía…).
 - Toca una portada para ver su sinopsis, géneros y calificación, y agrégala como **pendiente** o como **ya la estoy leyendo/viendo**. Las que ya tienes salen con **✓ La tienes**.
-
-### 5. Plataformas
-En la pestaña **Plataformas** hay dos secciones:
-- **📺 Dónde ves**: un recuadro por plataforma de streaming (Netflix, Prime Video, Disney+, HBO Max, Apple TV+, Paramount+, Crunchyroll, YouTube, ViX, Pluto TV y MUBI) con portadas, cuántas obras tienes y su estado.
-- **📖 Dónde lees**: un recuadro por cada página donde lees manhwas y mangas (Olympus, MHScans…), armado solo con tus links.
-
-Al entrar a una ves sus números, lo que tienes en curso y filtros por estado. Si alguna serie o película no tiene plataforma, aparece un aviso para elegirla (también desde las acciones rápidas).
 
 ### 6. Deportes
 Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UFC**. La app recuerda el último que abriste.
@@ -147,7 +150,7 @@ Arriba eliges el deporte: **⚽ Fútbol, 🏀 NBA, ⚾ MLB, 🏎️ F1 y 🥊 UF
 Cada obra tiene un espacio de **notas** que se guarda solo mientras escribes.
 
 ### 8. Estadísticas
-Totales por tipo y estado, capítulos leídos, episodios vistos, películas vistas, favoritas, mapa de actividad, géneros favoritos y mejor calificadas.
+Están en **Ajustes → Estadísticas**: totales por tipo y estado, capítulos leídos, episodios vistos, películas vistas, favoritas, mapa de actividad, géneros favoritos y mejor calificadas.
 
 ### 9. Navegador para abrir los links
 En **Ajustes → Abrir los links con** eliges dónde se abren tus capítulos:
@@ -158,11 +161,14 @@ En **Ajustes → Abrir los links con** eliges dónde se abren tus capítulos:
 
 Las apps web no pueden ver qué navegadores tienes instalados (el teléfono no lo permite). Si eliges uno que no tienes, en Android el link se abre en el navegador normal y en iPhone aparece un aviso. Usa **Probar con un link** para comprobarlo.
 
-### 10. Personalizar
-En **Ajustes → Apariencia** elige entre 10 colores (violeta, azul, cian, esmeralda, dorado, naranja, coral, rojo, rosa y **blanco**: fondo negro, letras blancas y botones blancos), negro puro AMOLED y la opción de reducir animaciones.
+### 10. Ajustes
+- **Inicio**: con qué pestaña abre la app (Lectura, Ver o Deportes), y si mostrar *Te puede gustar* y la fecha y hora.
+- **Apariencia**: 10 colores (violeta, azul, cian, esmeralda, dorado, naranja, coral, rojo, rosa y **blanco**: fondo negro, letras blancas y botones blancos), negro puro AMOLED, reducir animaciones y vibración al tocar.
+- **Páginas de lectura**: las páginas que la app ya entiende y las que **tú le enseñaste**. Cuando pegas el link de una página que la app no conoce, te pregunta cuál número del link es el capítulo y lo recuerda para esa página. Si alguna se equivoca, la borras ahí y vuelves a pegar un link.
+- Respaldo, navegador para abrir links, estadísticas y herramientas.
 
 ### 11. Eliminar
-Eliminar una obra, serie, película, equipo, liga o patrón de sitio **siempre pide confirmación**.
+Eliminar una obra, serie, película, equipo, liga o una página que le enseñaste **siempre pide confirmación**.
 
 ---
 
@@ -231,7 +237,7 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 
 - La app no aloja ni muestra contenido de terceros: solo guarda y abre los links que tú agregas. Los resúmenes de partidos se abren como búsqueda en YouTube.
 - Datos e imágenes de manhwa/manga/anime y recomendaciones: **AniList**. Datos de series: **TVmaze** (CC BY-SA 4.0).
-- Textos de películas y series: **Wikipedia** (CC BY-SA 4.0). Reparto de películas: **Wikidata** (CC0) con fotos de **Wikimedia Commons**. Temporadas, episodios y reparto de series: **TVmaze**. Las tendencias de películas y series salen de las estadísticas públicas de visitas de Wikipedia en español.
+- Textos de películas y series: **Wikipedia** (CC BY-SA 4.0). Íconos de las páginas de lectura: **DuckDuckGo**. Reparto de películas: **Wikidata** (CC0) con fotos de **Wikimedia Commons**. Temporadas, episodios y reparto de series: **TVmaze**. Las tendencias de películas y series salen de las estadísticas públicas de visitas de Wikipedia en español.
 - Fútbol, NBA, MLB y UFC: datos públicos de **ESPN**. Fórmula 1: **Jolpica F1** (continuación abierta de Ergast). No se muestran escudos ni logos de equipos, ligas o marcas: solo nombres e iniciales con colores.
 
 ## 📄 Licencia

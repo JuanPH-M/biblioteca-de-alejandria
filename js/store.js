@@ -58,7 +58,7 @@ export const S = {
   works: [],
   patterns: {},
   teams: [],
-  settings: { leagues: [], installHint: 0, lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated', browser: 'system', sport: 'futbol', sportFavs: {} },
+  settings: { leagues: [], installHint: 0, lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated', browser: 'system', sport: 'futbol', sportFavs: {}, startTab: 'leer', haptics: true, showRecs: true, showClock: true },
   filters: { q: '', type: 'all', status: 'all', platform: 'all', fav: false },
 };
 
@@ -406,9 +406,9 @@ export function matchScore(query, text) {
 export function workScore(w, q) {
   return Math.max(matchScore(q, w.title), ...(w.aliases || []).map((a) => matchScore(q, a) - 3), 0);
 }
-export function searchWorks(q, limit = 8) {
+export function searchWorks(q, limit = 8, base = S.works) {
   if (!normKey(q)) return [];
-  return S.works.map((w) => [w, workScore(w, q)]).filter(([, sc]) => sc > 0).sort((a, b) => b[1] - a[1] || b[0].updatedAt - a[0].updatedAt).slice(0, limit).map(([w]) => w);
+  return base.map((w) => [w, workScore(w, q)]).filter(([, sc]) => sc > 0).sort((a, b) => b[1] - a[1] || b[0].updatedAt - a[0].updatedAt).slice(0, limit).map(([w]) => w);
 }
 
 // ---------- filtros ----------

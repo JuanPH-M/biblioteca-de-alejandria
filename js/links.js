@@ -59,6 +59,27 @@ const nextOf = (n) => Math.floor(n) + 1;
 const fmtNum = (n) => (Number.isInteger(n) ? String(n) : String(n));
 
 // ---------- reglas conocidas ----------
+// Formato común de muchas páginas: /manga/{nombre o código}/capitulo-{número}/
+// (ImperioManhwa usa un código fijo en vez del nombre; RichToon usa el nombre)
+const looksLikeCode = (slug) => !/[-_]/.test(slug) && slug.length >= 10 && (slug.match(/[aeiou]/gi) || []).length / slug.length < 0.3;
+const MANGA_CAP = {
+  re: /\/(?:manga|manhwa|manhua|comic|comics|series|serie|obra|leer)\/([^/]+)\/(?:capitulo|cap|chapter|ch)[-_]?(\d+(?:\.\d+)?)\/?$/i,
+  parse(u) {
+    const m = u.pathname.match(this.re);
+    if (!m) return null;
+    // si es un código (no el nombre), el nombre lo escribes tú la primera vez
+    return { slug: m[1], title: looksLikeCode(m[1]) ? '' : slugToTitle(m[1]), chapter: parseFloat(m[2]), mode: 'known' };
+  },
+  build(u, n) {
+    const url = new URL(u.href);
+    url.pathname = url.pathname.replace(/((?:capitulo|cap|chapter|ch)[-_]?)\d+(?:\.\d+)?(\/?)$/i, `$1${fmtNum(n)}$2`);
+    return url.href;
+  },
+  series(u) {
+    const m = u.pathname.match(/^(.*?\/(?:manga|manhwa|manhua|comic|comics|series|serie|obra|leer)\/[^/]+)\//i);
+    return m ? `${u.origin}${m[1]}/` : null;
+  },
+};
 const RULES = [
   {
     id: 'mhscans',
@@ -142,8 +163,12 @@ const RULES = [
       return /\/series\//i.test(u.pathname) ? u.href : null;
     },
   },
+  { id: 'imperio', label: 'ImperioManhwa', home: 'https://imperiomanhwa.com/', test: (host) => /imperiomanhwa/.test(host), ...MANGA_CAP },
+  { id: 'richtoon', label: 'RichToon', test: (host) => /richtoon/.test(host), ...MANGA_CAP },
+  // cualquier otra página con el mismo formato
+  { id: 'mangacap', label: '', test: () => true, ...MANGA_CAP },
 ];
-export const KNOWN_SITES = RULES.map((r) => r.label);
+export const KNOWN_SITES = RULES.filter((r) => r.label).map((r) => r.label);
 
 // Números en la ruta del link (para sitios desconocidos)
 export function findNumbers(u) {
