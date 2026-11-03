@@ -1,10 +1,10 @@
 // Secciones: plataformas, fútbol, estadísticas, ajustes (respaldo) e importación de marcadores.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, readFile, download, relTime, coverHTML, vibrate, hueOf } from './ui.js';
-import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed, BROWSERS, browserChoices, openUrl, IS_IOS, IS_ANDROID, IS_STANDALONE } from './store.js';
+import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed, BROWSERS, browserChoices, openUrl, IS_IOS, IS_ANDROID, IS_STANDALONE, reminderText, reminderActive } from './store.js';
 import { PLATFORMS, STREAMING, parseBookmarksHTML, analyzeBookmarks, normKey, KNOWN_SITES } from './links.js';
 import { searchInfo } from './api.js';
 import { db } from './db.js';
-import { cardHTML, render, go, applyTheme, promptInstall, APP_VERSION } from './app.js';
+import { cardHTML, render, go, applyTheme, promptInstall, APP_VERSION, openNotifications } from './app.js';
 
 const backHeader = (title, sub = '', back = '#/') => `
   <header class="topbar">
@@ -307,6 +307,25 @@ export function renderSettings(root) {
     ${toggle('show-clock', '🕒 Mostrar fecha y hora', 'Debajo del nombre, en pequeño', st.showClock !== false)}
   </section>
 
+  <h2 class="set-title">🔔 Recordatorios de estreno</h2>
+  <section class="panel set-panel">
+    ${toggle('rem-all', '🔔 Avisos de estrenos', 'El día que sale capítulo o episodio nuevo, llega a la campanita', st.remindersOn !== false)}
+    ${toggle('rem-open', '📣 Avisarme al abrir la app', 'Un mensaje si hoy sale algo de lo que sigues', st.remindOnOpen !== false)}
+    <div class="set-sep"></div>
+    ${(() => { const list = S.works.filter((w) => w.reminder?.on && w.reminder.days?.length); return list.length
+      ? `<ul class="rem-list">${list.map((w) => `<li data-goto="${w.id}"><span class="grow"><b>${esc(w.title)}</b><small>${esc(reminderText(w))}${reminderActive(w) ? '' : ' · sin avisos por ahora'}</small></span><span class="chev">›</span></li>`).join('')}</ul>`
+      : '<p class="muted small">Todavía no tienes recordatorios. Ábrelos dentro de cada obra, en <b>🔔 Avisarme cuando salga…</b>, y elige qué días sale. Si la pones en pausa, no te llegan avisos.</p>'; })()}
+    <button class="btn block" id="open-notifs">🔔 Ver avisos</button>
+  </section>
+
+  <h2 class="set-title">📚 Biblioteca</h2>
+  <section class="panel set-panel">
+    <div class="set-row col"><span><b>Mostrar las obras como</b><small>En Lectura y en Ver</small></span>
+      <div class="seg two" id="def-view">${[['grid', '▦ Cuadrícula'], ['list', '☰ Lista']].map(([k, l]) => `<button class="${(st.view || 'grid') === k ? 'on' : ''}" data-v="${k}">${l}</button>`).join('')}</div></div>
+    <div class="set-row col"><span><b>Ordenar por</b></span>
+      <div class="seg four" id="def-sort">${[['updated', 'Recientes'], ['title', 'A–Z'], ['rating', 'Estrellas'], ['added', 'Agregadas']].map(([k, l]) => `<button class="${(st.sort || 'updated') === k ? 'on' : ''}" data-s="${k}">${l}</button>`).join('')}</div></div>
+  </section>
+
   <h2 class="set-title">🎨 Apariencia</h2>
   <section class="panel set-panel">
     <p class="muted small">Color de la app. Con <b>Blanco</b> el fondo es negro y las letras y botones blancos.</p>
@@ -344,6 +363,8 @@ export function renderSettings(root) {
   <section class="panel set-panel">
     <div class="col-btns">
       <button class="btn" id="fill-covers">${ICONS.sparkle} Completar portadas faltantes</button>
+      <button class="btn" id="check-update">${ICONS.refresh} Buscar actualización de la app</button>
+      <button class="btn" id="clear-cache">🧹 Borrar datos descargados</button>
       <button class="btn install-btn" id="install">📲 Instalar app</button>
       <button class="btn danger ghost" id="wipe">${ICONS.trash} Borrar todos los datos</button>
     </div>
@@ -414,6 +435,36 @@ export function renderSettings(root) {
   $('#br-test', root).onclick = () => openUrl('https://es.wikipedia.org/wiki/Biblioteca_de_Alejandr%C3%ADa');
   $('#amoled', root).onchange = async (e) => { await setPref('amoled', e.target.checked); applyTheme(); };
   $('#motion', root).onchange = async (e) => { await setPref('motion', e.target.checked ? 'off' : 'auto'); applyTheme(); };
+  $('#rem-all', root).onchange = async (e) => { await setPref('remindersOn', e.target.checked); renderSettings(root); };
+  $('#rem-open', root).onchange = async (e) => { await setPref('remindOnOpen', e.target.checked); };
+  $('#open-notifs', root).onclick = () => openNotifications();
+  root.querySelector('.rem-list')?.addEventListener('click', (e) => { const li = e.target.closest('[data-goto]'); if (li) go('#/obra/' + li.dataset.goto); });
+  $('#def-view', root).addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    await setPref('view', b.dataset.v); vibrate(6);
+    $$('#def-view button', root).forEach((x) => x.classList.toggle('on', x === b));
+  });
+  $('#def-sort', root).addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-s]'); if (!b) return;
+    await setPref('sort', b.dataset.s); vibrate(6);
+    $$('#def-sort button', root).forEach((x) => x.classList.toggle('on', x === b));
+  });
+  $('#check-update', root).onclick = async (e) => {
+    const b = e.currentTarget;
+    b.classList.add('spin');
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      await reg?.update();
+      toast(reg?.waiting || reg?.installing ? 'Hay una versión nueva: se está descargando' : `Tienes la última versión (${APP_VERSION})`, { icon: '✅' });
+    } catch { toast('No se pudo revisar ahora (¿sin conexión?).'); }
+    b.classList.remove('spin');
+  };
+  $('#clear-cache', root).onclick = async () => {
+    if (!(await confirmDialog('¿Borrar datos descargados?', 'Se borran las portadas, resultados y recomendaciones guardados para usar sin internet. Tus obras y tu progreso NO se tocan. Se vuelven a descargar cuando los abras.', { ok: 'Borrar' }))) return;
+    await db.clear('cache');
+    try { for (const k of await caches.keys()) if (!k.startsWith('shell-')) await caches.delete(k); } catch { /* sin caché */ }
+    toast('Datos descargados borrados', { icon: '🧹' });
+  };
   $('#haptics', root).onchange = async (e) => { await setPref('haptics', e.target.checked); applyTheme(); vibrate(15); };
   $('#show-recs', root).onchange = async (e) => { await setPref('showRecs', e.target.checked); };
   $('#show-clock', root).onchange = async (e) => { await setPref('showClock', e.target.checked); };

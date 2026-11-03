@@ -1691,3 +1691,169 @@ a, button, input, select, textarea, label, summary, [role="button"], [role="link
 .view-enter .types-head, .view-enter .type-cards { animation: fadeUp .45s .2s var(--ease) both; }
 [data-motion="off"] .view-enter * { animation: none !important; }
 .site-row { scroll-padding: 0 16px; }
+
+/* =====================================================================
+   v2.7 · Estilo One UI 9 + animaciones optimizadas para teléfono
+   Superficies sólidas (sin vidrio ni desenfoques que gastan batería),
+   esquinas muy redondeadas, títulos grandes arriba, botones en píldora
+   y una barra compacta con el título al bajar.
+   ===================================================================== */
+:root {
+  --bg: #0a0a0d;
+  --bg-2: #0f0f13;
+  --surface: #17171c;
+  --surface-2: #24242b;
+  --surface-solid: #17171c;
+  --surface-3: #1e1e25;
+  --border: rgba(255, 255, 255, .06);
+  --text: #f4f4f7;
+  --muted: #9b9ba8;
+  --radius: 26px;
+  --radius-sm: 18px;
+  --ease: cubic-bezier(.22, .9, .3, 1);
+  --spring: cubic-bezier(.3, 1.35, .55, 1);
+}
+[data-amoled="1"] { --bg: #000; --bg-2: #000; --surface: #121214; --surface-solid: #121214; --surface-2: #1d1d21; --surface-3: #18181b; }
+[data-accent="blanco"] { --surface: #141416; --surface-2: #222226; --surface-solid: #141416; }
+body { font-family: "SamsungOne", "One UI Sans", "Samsung Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; letter-spacing: -.1px; }
+
+/* Fondo plano, como One UI (las manchas animadas gastaban batería) */
+.ambient { background: radial-gradient(120% 60% at 50% -15%, color-mix(in srgb, var(--accent) 16%, var(--bg)) 0%, var(--bg) 55%); }
+.ambient i { display: none; }
+
+/* Títulos grandes arriba (zona de lectura) y botones al alcance del pulgar */
+.topbar { padding-top: calc(var(--safe-t) + 22px); padding-bottom: 14px; }
+.page-title.big { font-size: 30px; font-weight: 700; letter-spacing: -.6px; }
+.page-title { font-weight: 700; }
+.brand h1 { font-weight: 700; }
+
+/* Barra compacta al bajar */
+#minibar { position: fixed; z-index: 25; left: 0; right: 0; top: 0; padding: calc(var(--safe-t) + 10px) 20px 10px; background: color-mix(in srgb, var(--bg) 94%, transparent); border-bottom: 1px solid var(--border); font-size: 17px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transform: translateY(-100%); opacity: 0; transition: transform .28s var(--ease), opacity .2s; pointer-events: none; }
+#minibar.show { transform: none; opacity: 1; }
+
+/* Tarjetas y paneles: sólidos, sin borde marcado, muy redondeados */
+.panel, .set-link, .set-stats a, .known-sites, .last-read, .form-row, .f1-race, .ufc-ev, .f1-stand li, .fight-card li, .game-card, .lu-team, .tl-what, .ss-res .sg-item, .br-opt, .searchbar, .spotlight, .next-pick, .add-big, .fb-hero-match, .sport-hero {
+  border-color: transparent; }
+.panel { border-radius: var(--radius); background: var(--surface); box-shadow: none; }
+.searchbar { background: var(--surface); border-radius: 999px; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.searchbar:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
+.spotlight { background: var(--surface); border-radius: 30px; box-shadow: none; }
+.card { border-radius: 22px; border-color: transparent; background: var(--surface); }
+.next-pick { border-radius: 24px; }
+.add-big { border-radius: 24px; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* Botones en píldora */
+.btn { border-radius: 999px; border-color: transparent; background: var(--surface-2); font-weight: 650; }
+.btn.primary { box-shadow: none; }
+.icon-btn { border-radius: 50%; background: var(--surface); border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.chip { border-color: transparent; background: var(--surface-2); }
+.chip.on { box-shadow: none; }
+.seg { background: var(--surface-2); border-radius: 999px; }
+.seg button { border-radius: 999px; }
+.tabs2 { background: var(--surface); border-color: transparent; border-radius: 999px; }
+.tabs2 button, .tabs2-pill { border-radius: 999px; }
+.tabs2.stacked, .tabs2.stacked button, .tabs2.stacked .tabs2-pill { border-radius: 22px; }
+
+/* Barra de abajo estilo One UI: sólida, con píldora detrás del ícono activo */
+.tabbar { background: color-mix(in srgb, var(--surface) 96%, #000); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--border); border-radius: 28px; box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .8); }
+.tabbar a .ic { width: 56px; height: 32px; place-items: center; border-radius: 16px; transition: background .3s var(--ease), transform .3s var(--spring); }
+.tabbar a.active .ic { transform: none; background: color-mix(in srgb, var(--accent) 26%, transparent); color: var(--accent-2); }
+.tabbar a.active::after { display: none; }
+.tabbar a.active { font-weight: 750; }
+.fab { border-radius: 22px; }
+
+/* Ventanas (hojas) y avisos: sin desenfoque */
+.sheet { border-radius: 30px 30px 0 0; border-color: transparent; background: var(--surface-3); }
+.sheet-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0, 0, 0, .62); }
+.toast { -webkit-backdrop-filter: none; backdrop-filter: none; background: #2a2a31; border-color: transparent; border-radius: 22px; }
+.badge, .btn.ghost-glass, .dscore, .dhave, #offline-pill { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.badge { background: rgba(10, 10, 14, .78); }
+
+/* Ajustes: listas agrupadas como en One UI */
+.set-panel { padding: 6px 18px; }
+.set-panel > p:first-child { margin-top: 12px; }
+.set-panel .toggle { border-top-color: var(--border); }
+.set-title { margin: 26px 24px 2px; font-size: 13px; color: var(--accent-2); }
+.toggle i { width: 46px; height: 26px; }
+.toggle i::after { width: 20px; height: 20px; }
+.toggle input:checked + i::after { transform: translateX(20px); }
+.seg.two { grid-template-columns: 1fr 1fr; }
+.seg.four { grid-template-columns: repeat(4, 1fr); }
+.seg.four button { font-size: 12px; }
+
+/* Campanita de avisos */
+.bell { position: relative; width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--text); transition: transform .2s var(--spring); }
+.bell:active { transform: scale(.9); }
+.bell.has svg { animation: bellRing 1.6s var(--ease) 1; transform-origin: 50% 4px; color: var(--gold); }
+@keyframes bellRing { 10%, 30% { transform: rotate(14deg); } 20%, 40% { transform: rotate(-12deg); } 50% { transform: rotate(0); } }
+.bell-n { position: absolute; top: 4px; right: 3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; font-size: 10.5px; font-weight: 800; line-height: 18px; text-align: center; color: #fff; background: #ef4444; box-shadow: 0 0 0 2px var(--bg); animation: tileIn .4s var(--spring) both; }
+.sheet-head-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.notif-list, .rem-list { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
+.notif { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 20px; background: var(--surface-2); cursor: pointer; animation: fadeUp .3s var(--ease) both; animation-delay: calc(var(--i) * 35ms); }
+.notif .grow { display: grid; gap: 2px; min-width: 0; }
+.notif b { font-size: 14px; }
+.notif small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notif.seen { opacity: .6; background: var(--surface); }
+.notif-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
+.rem-list li { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-top: 1px solid var(--border); cursor: pointer; }
+.rem-list li:first-child { border-top: 0; }
+.rem-list .grow { display: grid; gap: 2px; min-width: 0; }
+.rem-list small { font-size: 12px; color: var(--muted); }
+.rem-list .chev { color: var(--muted); font-size: 20px; }
+
+/* Recordatorio dentro de una obra */
+.reminder-panel .rem-head { border-top: 0; margin-top: 0; padding-top: 0; }
+.reminder-panel .rem-head > span { display: grid; gap: 2px; padding-right: 10px; }
+.reminder-panel .rem-head small { font-size: 12px; color: var(--muted); font-weight: 400; }
+.reminder-panel.is-on { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
+.rem-body { animation: fadeUp .3s var(--ease) both; }
+.day-chips { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 10px 0 12px; }
+.day-chip { aspect-ratio: 1; max-width: 46px; justify-self: center; width: 100%; border-radius: 50%; font-weight: 800; font-size: 14px; color: var(--muted); background: var(--surface-2); transition: transform .25s var(--spring), background .2s, color .2s; }
+.day-chip.on { background: var(--accent); color: var(--on-accent); transform: scale(1.06); }
+.day-chip:active { transform: scale(.88); }
+.rem-time { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; }
+.rem-time input { padding: 8px 12px; border-radius: 14px; border: 0; background: var(--surface-2); color: var(--text); }
+.rem-state { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+
+/* Deportes: selector de 5 botones iguales con indicador que se desliza */
+.sport-switch { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 0 16px 14px; padding: 4px; border-radius: 24px; background: var(--surface); overflow: visible; }
+.sport-pill { position: relative; z-index: 1; display: grid; justify-items: center; gap: 2px; padding: 8px 2px; border-radius: 20px; background: none; border: 0; color: var(--muted); font-size: 12px; box-shadow: none; animation: none; }
+.sport-pill span { font-size: 22px; }
+.sport-pill.on { color: #fff; background: none; box-shadow: none; }
+.sport-pill.on span { transform: scale(1.12) translateY(-1px); }
+.sport-ind { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 5); border-radius: 20px; background: linear-gradient(160deg, var(--sc), color-mix(in srgb, var(--sc) 55%, #000)); box-shadow: 0 8px 20px -10px var(--sc); transform: translateX(calc(var(--x) * 100%)); transition: transform .4s var(--spring), background .3s; }
+.sport-hero { display: flex; align-items: center; gap: 14px; margin: 0 16px 14px; padding: 16px; border-radius: 26px; background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--sc) 32%, transparent), transparent 60%), var(--surface); animation: cardIn .45s var(--ease) both; }
+.sh-emoji { width: 52px; height: 52px; flex: none; display: grid; place-items: center; border-radius: 18px; font-size: 28px; background: color-mix(in srgb, var(--sc) 28%, var(--surface-2)); }
+.sport-hero .grow { display: grid; gap: 2px; }
+.sport-hero b { font-size: 18px; font-weight: 800; }
+.sport-hero small { font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+#sport-body.slide-next { animation: slideNext .38s var(--ease) both; }
+#sport-body.slide-prev { animation: slidePrev .38s var(--ease) both; }
+@keyframes slideNext { from { opacity: 0; transform: translateX(28px); } }
+@keyframes slidePrev { from { opacity: 0; transform: translateX(-28px); } }
+.game-card { background: var(--surface); border-radius: 22px; }
+.game-card.is-live { box-shadow: inset 0 0 0 1.5px rgba(239, 68, 68, .55); }
+.game-card.is-fav { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 50%, transparent); }
+.day-pill { border-color: transparent; background: var(--surface); border-radius: 18px; }
+.f1-hero, .ufc-hero { border-color: transparent; border-radius: 28px; }
+.fb-tile { border-radius: 26px; border-color: transparent; }
+.lg-table td { border-top-color: var(--border); }
+
+/* ---------- Rendimiento en teléfonos ---------- */
+/* El navegador solo pinta lo que cambia en cada tarjeta */
+.card, .dcard, .ptile, .fb-tile, .game-card, .site-card { contain: layout paint; }
+/* Animaciones solo con transform y opacity, que el teléfono mueve sin esfuerzo */
+.view-enter { animation-duration: .3s; }
+.card { animation-duration: .4s; }
+@media (pointer: coarse) {
+  /* en el teléfono no hay animaciones infinitas de fondo ni desenfoques que se recalculan */
+  .ptile::before, .ph-glow, .f1-stripes, .site-card::before, .fb-tile::before, .ufc-vs > span { animation: none !important; }
+  .ptile::before, .site-card::before, .fb-tile::before { filter: none; opacity: .14; }
+  .ph-glow { filter: none; opacity: .18; }
+  .card:hover, .ptile:hover, .fb-tile:hover, .dcard:hover { transform: none; box-shadow: none; }
+  * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+[data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+@media (max-width: 400px) { .brand h1 { font-size: 16.5px; letter-spacing: -.3px; } .brand { gap: 8px; } .brand img { width: 34px; height: 34px; } .bell { width: 40px; height: 40px; } .mode-switch { min-width: 46px; padding: 5px 6px; } .topbar { gap: 8px; } }
+@media (max-width: 400px) { .brand h1 { white-space: normal; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } }

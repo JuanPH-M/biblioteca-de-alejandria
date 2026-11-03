@@ -161,13 +161,23 @@ En **Ajustes → Abrir los links con** eliges dónde se abren tus capítulos:
 
 Las apps web no pueden ver qué navegadores tienes instalados (el teléfono no lo permite). Si eliges uno que no tienes, en Android el link se abre en el navegador normal y en iPhone aparece un aviso. Usa **Probar con un link** para comprobarlo.
 
-### 10. Ajustes
+### 10. Recordatorios de estreno (opcional)
+Dentro de cada manhwa, manga, anime o serie está **🔔 Avisarme cuando salga capítulo nuevo**:
+- Actívalo si quieres y toca los días en que sale (por ejemplo miércoles y jueves). La hora es opcional.
+- Ese día te llega un aviso a la **campanita** de arriba (con un número rojo), y al abrir la app aparece un mensaje si hoy sale algo.
+- Si la obra está **en pausa**, abandonada o terminada, **no te llegan avisos** hasta que la vuelvas a seguir.
+- Si cambia el día en que sale, tocas los días nuevos y listo.
+- En **Ajustes → Recordatorios** puedes apagar todos los avisos y ver la lista de tus recordatorios.
+
+### 11. Ajustes
 - **Inicio**: con qué pestaña abre la app (Lectura, Ver o Deportes), y si mostrar *Te puede gustar* y la fecha y hora.
+- **Recordatorios**: encender o apagar los avisos y el mensaje al abrir la app.
+- **Biblioteca**: ver las obras en cuadrícula o lista, y el orden.
 - **Apariencia**: 10 colores (violeta, azul, cian, esmeralda, dorado, naranja, coral, rojo, rosa y **blanco**: fondo negro, letras blancas y botones blancos), negro puro AMOLED, reducir animaciones y vibración al tocar.
 - **Páginas de lectura**: las páginas que la app ya entiende y las que **tú le enseñaste**. Cuando pegas el link de una página que la app no conoce, te pregunta cuál número del link es el capítulo y lo recuerda para esa página. Si alguna se equivoca, la borras ahí y vuelves a pegar un link.
-- Respaldo, navegador para abrir links, estadísticas y herramientas.
+- Respaldo, navegador para abrir links, estadísticas y herramientas (buscar actualización de la app y borrar los datos descargados si algo no carga bien).
 
-### 11. Eliminar
+### 12. Eliminar
 Eliminar una obra, serie, película, equipo, liga o una página que le enseñaste **siempre pide confirmación**.
 
 ---
@@ -227,6 +237,8 @@ Para probar en tu computador: `python tools/dev-server.py` y abre http://127.0.0
 ---
 
 ## 🧱 Tecnología
+
+- Diseño inspirado en **One UI**: títulos grandes, tarjetas sólidas muy redondeadas, botones en píldora y una barra compacta con el título al bajar. Sin efectos de vidrio ni fondos animados, para que en el teléfono las animaciones vayan fluidas y gaste menos batería.
 
 - HTML, CSS y JavaScript (módulos ES) **sin paso de compilación** ni dependencias.
 - **IndexedDB** para los datos, **service worker** para funcionar sin internet, `manifest.json` con íconos propios, accesos directos y *share target*.

@@ -4,6 +4,7 @@ import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, relTime, 
 import { S, setPref, openUrl } from './store.js';
 import { ATTRIBUTION, sportDay, sportStandings, sportTeamSchedule, ufcEvents, f1Season, f1Results, f1Standings } from './api.js';
 import { renderFootball } from './football.js';
+import { bellHTML } from './app.js';
 
 export const SPORTS = [
   { k: 'futbol', emoji: '⚽', name: 'Fútbol', sub: 'Tus equipos y ligas', c: '#16a34a' },
@@ -120,9 +121,9 @@ export function renderSports(root, param, sub) {
   root.innerHTML = `<div class="sports" style="--sc:${SP[sport].c}">
   <header class="topbar">
     <div class="grow"><h1 class="page-title big">🏟️ Deportes</h1><p class="sub" id="sp-sub">${esc(SP[sport].sub)}</p></div>
-    <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">${ICONS.gear}</a>
+    ${bellHTML()}
   </header>
-  <div class="sport-switch scroll-x" role="tablist">${SPORTS.map((s, i) => `<button role="tab" class="sport-pill ${s.k === sport ? 'on' : ''}" data-sport="${s.k}" style="--c:${s.c};--i:${i}" aria-selected="${s.k === sport}"><span>${s.emoji}</span><b>${s.name}</b></button>`).join('')}</div>
+  <div class="sport-switch" role="tablist">${SPORTS.map((s, i) => `<button role="tab" class="sport-pill ${s.k === sport ? 'on' : ''}" data-sport="${s.k}" style="--c:${s.c};--i:${i}" aria-selected="${s.k === sport}"><span>${s.emoji}</span><b>${s.name}</b></button>`).join('')}<i class="sport-ind" style="--x:${SPORTS.findIndex((x) => x.k === sport)}"></i></div>
   <div id="sport-body"></div></div>`;
   $('.sport-switch', root).addEventListener('click', (e) => {
     const b = e.target.closest('[data-sport]');
@@ -132,13 +133,14 @@ export function renderSports(root, param, sub) {
     switchSport(b.dataset.sport);
   });
   drawSport(sub);
-  // la píldora elegida a la vista
-  centerIn($('.sport-switch', root), $('.sport-pill.on', root));
 }
 
 function switchSport(k) {
   clearInterval(liveTimer);
+  const from = SPORTS.findIndex((x) => x.k === sport), to = SPORTS.findIndex((x) => x.k === k);
+  slideDir = to > from ? 'next' : 'prev';
   sport = k;
+  $('.sport-ind', rootEl)?.style.setProperty('--x', to);
   setPref('sport', k);
   $('.sports', rootEl).style.setProperty('--sc', SP[k].c);
   $('#sp-sub', rootEl).textContent = SP[k].sub;
@@ -146,9 +148,13 @@ function switchSport(k) {
   drawSport();
 }
 
+let slideDir = '';
 function drawSport(sub) {
   const body = $('#sport-body', rootEl);
-  body.classList.remove('tab-in'); void body.offsetWidth; body.classList.add('tab-in');
+  body.classList.remove('tab-in', 'slide-next', 'slide-prev'); void body.offsetWidth;
+  body.classList.add(slideDir ? `slide-${slideDir}` : 'tab-in');
+  slideDir = '';
+  window.scrollTo({ top: 0 });
   if (sport === 'futbol') return renderFootball(body, sub);
   if (sport === 'f1') return drawF1(body);
   if (sport === 'ufc') return drawUFC(body);
@@ -162,10 +168,11 @@ const leagueState = { nba: { view: 'partidos', day: 0 }, mlb: { view: 'partidos'
 function drawLeague(body, sp) {
   const st = leagueState[sp];
   body.innerHTML = `
-    <div class="tabs2 three" role="tablist">
-      <button role="tab" class="${st.view === 'partidos' ? 'on' : ''}" data-v="partidos">📅 Partidos</button>
-      <button role="tab" class="${st.view === 'tabla' ? 'on' : ''}" data-v="tabla">📊 Tabla</button>
-      <button role="tab" class="${st.view === 'equipos' ? 'on' : ''}" data-v="equipos">⭐ Equipos <em>${favs(sp).length}</em></button>
+    <section class="sport-hero" id="sport-hero"><span class="sh-emoji">${SP[sp].emoji}</span><span class="grow"><b>${SP[sp].name}</b><small id="sh-today">${SP[sp].sub} · buscando los partidos de hoy…</small></span></section>
+    <div class="tabs2 three stacked" role="tablist">
+      <button role="tab" class="${st.view === 'partidos' ? 'on' : ''}" data-v="partidos"><span class="t-ic">📅</span><span>Partidos</span></button>
+      <button role="tab" class="${st.view === 'tabla' ? 'on' : ''}" data-v="tabla"><span class="t-ic">📊</span><span>Tabla</span></button>
+      <button role="tab" class="${st.view === 'equipos' ? 'on' : ''}" data-v="equipos"><span class="t-ic">⭐</span><span>Mis equipos</span>${favs(sp).length ? `<em>${favs(sp).length}</em>` : '<em hidden></em>'}</button>
       <i class="tabs2-pill" style="--x:${['partidos', 'tabla', 'equipos'].indexOf(st.view)}"></i>
     </div>
     <div id="lg-view"></div>
@@ -179,6 +186,14 @@ function drawLeague(body, sp) {
     drawLeagueView(body, sp);
   });
   drawLeagueView(body, sp);
+  // resumen de hoy en la cabecera
+  sportDay(sp, addDays(new Date(), 0)).then((r) => {
+    const el = $('#sh-today', body);
+    if (!el?.isConnected) return;
+    const live = r.data.filter((g) => g.state === 'in').length;
+    const mine = r.data.filter((g) => isFavGame(sp, g)).length;
+    el.innerHTML = r.data.length ? `Hoy: ${r.data.length} ${r.data.length === 1 ? 'partido' : 'partidos'}${live ? ` · <i class="live-dot"></i> ${live} en vivo` : ''}${mine ? ` · ⭐ ${mine} de tus equipos` : ''}` : `${SP[sp].sub} · hoy no hay partidos`;
+  }).catch(() => {});
 }
 
 function drawLeagueView(body, sp) {
@@ -290,7 +305,7 @@ function openGame(g, sp, onRefresh) {
 }
 function refreshCounts(sp) {
   const em = $('.tabs2 [data-v="equipos"] em', rootEl);
-  if (em) em.textContent = favs(sp).length;
+  if (em) { em.textContent = favs(sp).length; em.hidden = !favs(sp).length; }
 }
 
 // --- tabla ---
@@ -441,10 +456,10 @@ function gpName(name = '', short = false) {
 let f1View = 'calendario';
 async function drawF1(body, force = false) {
   body.innerHTML = `<div id="f1-hero">${loading('Cargando la temporada…')}</div>
-    <div class="tabs2 three" role="tablist">
-      <button role="tab" class="${f1View === 'calendario' ? 'on' : ''}" data-v="calendario">🗓️ Calendario</button>
-      <button role="tab" class="${f1View === 'pilotos' ? 'on' : ''}" data-v="pilotos">🧑‍✈️ Pilotos</button>
-      <button role="tab" class="${f1View === 'equipos' ? 'on' : ''}" data-v="equipos">🏭 Equipos</button>
+    <div class="tabs2 three stacked" role="tablist">
+      <button role="tab" class="${f1View === 'calendario' ? 'on' : ''}" data-v="calendario"><span class="t-ic">🗓️</span><span>Calendario</span></button>
+      <button role="tab" class="${f1View === 'pilotos' ? 'on' : ''}" data-v="pilotos"><span class="t-ic">🧑‍✈️</span><span>Pilotos</span></button>
+      <button role="tab" class="${f1View === 'equipos' ? 'on' : ''}" data-v="equipos"><span class="t-ic">🏭</span><span>Equipos</span></button>
       <i class="tabs2-pill" style="--x:${['calendario', 'pilotos', 'equipos'].indexOf(f1View)}"></i>
     </div>
     <div id="f1-view"></div>
@@ -564,9 +579,9 @@ const statusF1 = (t = '') => (/^\+?\d+ Laps?$/i.test(t) ? t.replace(/Laps?/i, 'v
 let ufcView = 'proximos';
 async function drawUFC(body, force = false) {
   body.innerHTML = `<div id="ufc-hero">${loading('Cargando eventos…')}</div>
-    <div class="tabs2" role="tablist">
-      <button role="tab" class="${ufcView === 'proximos' ? 'on' : ''}" data-v="proximos">📅 Próximos</button>
-      <button role="tab" class="${ufcView === 'resultados' ? 'on' : ''}" data-v="resultados">🏁 Resultados</button>
+    <div class="tabs2 stacked" role="tablist">
+      <button role="tab" class="${ufcView === 'proximos' ? 'on' : ''}" data-v="proximos"><span class="t-ic">📅</span><span>Próximos</span></button>
+      <button role="tab" class="${ufcView === 'resultados' ? 'on' : ''}" data-v="resultados"><span class="t-ic">🏁</span><span>Resultados</span></button>
       <i class="tabs2-pill" style="--x:${ufcView === 'resultados' ? 1 : 0}"></i>
     </div>
     <div id="ufc-view"></div>

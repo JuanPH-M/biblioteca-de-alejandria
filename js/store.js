@@ -58,7 +58,7 @@ export const S = {
   works: [],
   patterns: {},
   teams: [],
-  settings: { leagues: [], installHint: 0, lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated', browser: 'system', sport: 'futbol', sportFavs: {}, startTab: 'leer', haptics: true, showRecs: true, showClock: true },
+  settings: { leagues: [], installHint: 0, lastBackup: 0, view: 'grid', accent: 'violet', amoled: false, motion: 'auto', activity: {}, sort: 'updated', browser: 'system', sport: 'futbol', sportFavs: {}, startTab: 'leer', haptics: true, showRecs: true, showClock: true, remindersOn: true, remindOnOpen: true, notifSeen: {}, notifToastDay: '' },
   filters: { q: '', type: 'all', status: 'all', platform: 'all', fav: false },
 };
 
@@ -367,6 +367,58 @@ export function analyzeUrl(raw) {
   const parsed = parseLink(raw, S.patterns);
   if (!parsed) return null;
   return { parsed, existing: findWorkForLink(parsed, S.works) };
+}
+
+// ---------- recordatorios de estreno (opcionales, por obra) ----------
+// w.reminder = { on, days: [0-6] (0 = domingo), time: 'HH:MM' o '', since }
+export const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // la semana empieza el lunes
+const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// No avisa si la obra está en pausa, abandonada o terminada, ni si los avisos están apagados en Ajustes
+export function reminderActive(w) {
+  return !!(w.reminder?.on && w.reminder.days?.length && !['pausado', 'abandonado', 'terminado'].includes(w.status) && S.settings.remindersOn !== false);
+}
+export function reminderText(w) {
+  const r = w.reminder;
+  if (!r?.days?.length) return '';
+  // "los lunes", "los sábados", "los domingos"
+  const days = WEEK_ORDER.filter((d) => r.days.includes(d)).map((d) => (d === 6 || d === 0 ? WEEKDAYS[d] + 's' : WEEKDAYS[d]));
+  const list = days.length > 1 ? `${days.slice(0, -1).join(', ')} y ${days[days.length - 1]}` : days[0];
+  return `${days.length === 7 ? 'Todos los días' : `Los ${list}`}${r.time ? ` a las ${r.time}` : ''}`;
+}
+// Avisos: el estreno más reciente de cada obra en los últimos 7 días (ya llegada su hora)
+export function notifications(now = new Date()) {
+  const seen = S.settings.notifSeen || {};
+  const out = [];
+  for (const w of S.works) {
+    if (!reminderActive(w)) continue;
+    const since = w.reminder.since ? new Date(w.reminder.since) : null;
+    if (since) since.setHours(0, 0, 0, 0);
+    for (let back = 0; back < 7; back++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - back);
+      if (!w.reminder.days.includes(d.getDay())) continue;
+      if (since && d < since) break;
+      if (w.reminder.time) {
+        const [h, m] = w.reminder.time.split(':').map(Number);
+        const at = new Date(d); at.setHours(h || 0, m || 0, 0, 0);
+        if (at > now) continue;
+      }
+      const key = `${w.id}:${dayKey(d)}`;
+      out.push({ key, w, date: new Date(d), back, seen: !!seen[key] });
+      break;
+    }
+  }
+  return out.sort((a, b) => (a.seen - b.seen) || (a.back - b.back));
+}
+export const unseenCount = () => notifications().filter((n) => !n.seen).length;
+export async function markNotifSeen(keys) {
+  const seen = { ...(S.settings.notifSeen || {}) };
+  keys.forEach((k) => { seen[k] = 1; });
+  // se olvidan los avisos de hace más de 3 semanas
+  const limit = dayKey(new Date(Date.now() - 21 * 864e5));
+  for (const k of Object.keys(seen)) if (k.split(':')[1] < limit) delete seen[k];
+  await setPref('notifSeen', seen);
 }
 
 // ---------- búsqueda por parecido ----------

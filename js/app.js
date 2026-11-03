@@ -1,6 +1,6 @@
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
-import { S, TYPES, STATUSES, statusLabel, statusHint, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker } from './store.js';
+import { S, TYPES, STATUSES, statusLabel, statusHint, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker, WEEKDAYS, WEEK_ORDER, reminderActive, reminderText, notifications, unseenCount, markNotifSeen } from './store.js';
 import { PLATFORMS, STREAMING, parseLink } from './links.js';
 import { ATTRIBUTION, tvmazeShow, tvmazeFind, wikidataIdFor, wikidataCast, pubStatusEs } from './api.js';
 import { openEditor, openPasteSheet, openAddChooser } from './editor.js';
@@ -10,7 +10,7 @@ const loadDiscover = () => import('./discover.js');
 const loadSports = () => import('./sports.js');
 
 const view = $('#view');
-export const APP_VERSION = '2.6.0';
+export const APP_VERSION = '2.7.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -94,6 +94,21 @@ function tabFor(r) {
   return { home: 'home', ver: 'ver', futbol: 'deportes', deportes: 'deportes', stats: 'ajustes', ajustes: 'ajustes', importar: 'ajustes' }[r.name] || 'home';
 }
 window.addEventListener('hashchange', () => render());
+// Barra compacta con el título que aparece al bajar (como en One UI)
+(() => {
+  const bar = document.getElementById('minibar');
+  if (!bar) return;
+  let ticking = false;
+  const update = () => {
+    ticking = false;
+    const big = view.querySelector('.page-title, .hero h1, .brand-title');
+    const show = window.scrollY > 110 && !!big;
+    if (show) bar.textContent = (big.textContent || '').replace(/👋/g, '').trim();
+    bar.classList.toggle('show', show);
+  };
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  addEventListener('hashchange', () => bar.classList.remove('show'));
+})();
 // Con el teclado abierto: las ventanas usan solo el espacio visible y el campo que escribes
 // sube para que las sugerencias de abajo se vean
 (() => {
@@ -215,6 +230,7 @@ async function renderHome(root, mode = 'leer') {
       <a href="#/" class="brand-logo" id="brand-logo" aria-label="Ir al inicio"><img src="icons/icon.svg" alt="" width="38" height="38"></a>
       <div class="brand-text"><h1 class="brand-title ${greeted ? '' : 'greeting'}" id="brand-title">${greeted ? 'Biblioteca de Alejandría' : `${hello} <span class="wave">👋</span>`}</h1><p class="sub"><span class="mode-pill">${M.emoji} ${M.label}</span> ${total} ${total === 1 ? 'obra' : 'obras'}${today ? ` · hoy ${today} ${today === 1 ? 'avance' : 'avances'}` : ''}</p>${S.settings.showClock !== false ? `<p class="clock" id="clock">${clockText()}</p>` : ''}</div>
     </div>
+    ${bellHTML()}
     <a href="${mode === 'leer' ? '#/ver' : '#/'}" class="mode-switch" aria-label="${mode === 'leer' ? 'Ir a lo que ves' : 'Ir a lo que lees'}"><span>${mode === 'leer' ? '📺' : '📖'}</span><small>${mode === 'leer' ? 'Ver' : 'Leer'}</small></a>
   </header>
   ${showInstallHint() ? `<div class="banner install-hint"><span>📲 Instala la app en tu ${isIOS() ? 'iPhone' : 'teléfono'} para usarla a pantalla completa.</span><button class="btn sm" id="ih-how">Cómo</button><button class="icon-btn xs" id="ih-x" aria-label="Ocultar">${ICONS.close}</button></div>` : ''}
@@ -491,6 +507,111 @@ function spotlightHTML(w) {
       </div>
     </div>
   </section>`;
+}
+
+// ======================= RECORDATORIOS Y CAMPANITA =======================
+const SHORT_DAYS = { 1: 'L', 2: 'M', 3: 'X', 4: 'J', 5: 'V', 6: 'S', 0: 'D' };
+export function bellHTML() {
+  const n = unseenCount();
+  return `<button class="bell ${n ? 'has' : ''}" data-bell aria-label="Avisos${n ? `: ${n} sin ver` : ''}">${ICONS.bell}${n ? `<b class="bell-n">${n > 9 ? '9+' : n}</b>` : ''}</button>`;
+}
+function refreshBells() {
+  $$('[data-bell]').forEach((b) => { b.outerHTML = bellHTML(); });
+}
+function reminderPanelHTML(w) {
+  const r = w.reminder || { on: false, days: [], time: '' };
+  const t = TYPES[w.type];
+  const paused = ['pausado', 'abandonado', 'terminado'].includes(w.status);
+  return `<section class="panel reminder-panel ${r.on ? 'is-on' : ''}" id="rem-panel">
+    <label class="toggle rem-head"><span><b>🔔 Avisarme cuando salga ${t.unitLong === 'episodio' ? 'episodio' : 'capítulo'} nuevo</b><small>Opcional · te llega a la campanita de la app</small></span><input type="checkbox" id="rem-on" ${r.on ? 'checked' : ''}><i></i></label>
+    <div class="rem-body" ${r.on ? '' : 'hidden'}>
+      <p class="muted small">¿Qué días sale? Puedes cambiarlos cuando quieras.</p>
+      <div class="day-chips" id="rem-days">${WEEK_ORDER.map((d) => `<button class="day-chip ${r.days?.includes(d) ? 'on' : ''}" data-day="${d}" aria-label="${WEEKDAYS[d]}" aria-pressed="${!!r.days?.includes(d)}">${SHORT_DAYS[d]}</button>`).join('')}</div>
+      <label class="rem-time"><span>Hora (opcional)</span><input type="time" id="rem-time" value="${esc(r.time || '')}"></label>
+      <p class="rem-state" id="rem-state">${remStateText(w, paused)}</p>
+    </div>
+  </section>`;
+}
+function remStateText(w, paused = ['pausado', 'abandonado', 'terminado'].includes(w.status)) {
+  const r = w.reminder;
+  if (!r?.days?.length) return 'Elige al menos un día.';
+  if (paused) return `⏸️ ${reminderText(w)}. Como está ${{ pausado: 'en pausa', abandonado: 'abandonada', terminado: 'terminada' }[w.status]}, no te llegarán avisos hasta que la sigas.`;
+  if (S.settings.remindersOn === false) return `${reminderText(w)}. Los avisos están apagados en Ajustes.`;
+  return `✅ ${reminderText(w)} te avisaremos.`;
+}
+function bindReminderPanel(w, root) {
+  const panel = $('#rem-panel', root);
+  if (!panel) return;
+  const save = async () => {
+    await saveWork(w, { touch: false });
+    $('#rem-state', root).textContent = remStateText(w);
+    panel.classList.toggle('is-on', !!w.reminder?.on);
+    refreshBells();
+  };
+  $('#rem-on', root).onchange = async (e) => {
+    w.reminder = { days: [], time: '', ...(w.reminder || {}), on: e.target.checked };
+    if (e.target.checked && !w.reminder.since) w.reminder.since = Date.now();
+    $('.rem-body', root).hidden = !e.target.checked;
+    vibrate(8);
+    await save();
+    if (e.target.checked && !w.reminder.days.length) toast('Elige qué días sale', { icon: '🔔' });
+  };
+  $('#rem-days', root).addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-day]');
+    if (!b) return;
+    const d = +b.dataset.day;
+    const days = new Set(w.reminder?.days || []);
+    days.has(d) ? days.delete(d) : days.add(d);
+    w.reminder = { ...(w.reminder || {}), on: true, days: [...days], since: w.reminder?.since || Date.now() };
+    b.classList.toggle('on', days.has(d));
+    b.setAttribute('aria-pressed', days.has(d));
+    vibrate(6);
+    await save();
+  });
+  $('#rem-time', root).onchange = async (e) => { w.reminder = { ...(w.reminder || {}), time: e.target.value }; await save(); };
+}
+
+// Ventana de avisos
+export function openNotifications() {
+  const list = notifications();
+  const dayLabel = (n) => (n.back === 0 ? 'Hoy' : n.back === 1 ? 'Ayer' : `El ${WEEKDAYS[n.date.getDay()]}`);
+  const withRem = S.works.filter((w) => w.reminder?.on && w.reminder.days?.length);
+  const s = openSheet(`
+    <div class="sheet-head-row"><h3 class="sheet-title">🔔 Avisos</h3>${list.some((n) => !n.seen) ? '<button class="link-btn small" id="nt-all">Marcar todo como visto</button>' : ''}</div>
+    ${list.length ? `<ul class="notif-list">${list.map((n, i) => `<li class="notif ${n.seen ? 'seen' : ''}" data-key="${esc(n.key)}" data-id="${n.w.id}" style="--i:${i}">
+        ${coverHTML(n.w, 'xs')}
+        <span class="grow"><b>${dayLabel(n)} ${n.back === 0 ? 'sale' : 'salió'} ${TYPES[n.w.type].unitLong === 'episodio' ? 'episodio' : 'capítulo'} nuevo</b><small>${esc(n.w.title)} · vas en ${esc(progressLabel(n.w))}</small></span>
+        ${n.seen ? '' : '<i class="notif-dot"></i>'}</li>`).join('')}</ul>`
+      : `<div class="empty small"><div class="empty-art"><span>🔕</span></div><h3>No hay avisos</h3><p class="muted">Dentro de cada obra puedes activar <b>🔔 Avisarme</b> y elegir qué días sale. El aviso llega aquí ese día.</p></div>`}
+    ${withRem.length ? `<h4 class="ss-label">Tus recordatorios</h4><ul class="rem-list">${withRem.map((w) => `<li data-id="${w.id}"><span class="grow"><b>${esc(w.title)}</b><small>${esc(reminderText(w))}${reminderActive(w) ? '' : ' · sin avisos (en pausa o apagado)'}</small></span><span class="chev">›</span></li>`).join('')}</ul>` : ''}`, { cls: 'tall' });
+  s.el.addEventListener('click', async (e) => {
+    if (e.target.closest('#nt-all')) {
+      await markNotifSeen(list.map((n) => n.key));
+      $$('.notif', s.el).forEach((x) => { x.classList.add('seen'); x.querySelector('.notif-dot')?.remove(); });
+      e.target.closest('#nt-all').remove();
+      refreshBells();
+      vibrate(10);
+      return;
+    }
+    const it = e.target.closest('[data-id]');
+    if (!it) return;
+    if (it.dataset.key) await markNotifSeen([it.dataset.key]);
+    refreshBells();
+    s.close();
+    whenSettled(() => go('#/obra/' + it.dataset.id));
+  });
+}
+document.addEventListener('click', (e) => { if (e.target.closest('[data-bell]')) { vibrate(8); openNotifications(); } });
+// Al abrir la app: si hoy sale algo, aparece un aviso (una vez al día)
+async function notifyOnOpen() {
+  if (S.settings.remindOnOpen === false) return;
+  const today = new Date().toDateString();
+  if (S.settings.notifToastDay === today) return;
+  const fresh = notifications().filter((n) => !n.seen && n.back === 0);
+  if (!fresh.length) return;
+  await setPref('notifToastDay', today);
+  const first = fresh[0].w;
+  toast(fresh.length === 1 ? `Hoy sale ${TYPES[first.type].unitLong === 'episodio' ? 'episodio' : 'capítulo'} nuevo de ${first.title}` : `Hoy salen ${fresh.length} estrenos de lo que sigues`, { icon: '🔔', timeout: 6000, action: 'Ver', onAction: openNotifications });
 }
 
 // ---------- Buscar otra obra (desde cualquier pantalla) ----------
@@ -1059,6 +1180,7 @@ async function renderDetail(root, id) {
     </section>
 
     ${isTrackOnly(w) ? platformPanelHTML(w) : linksHTML(w)}
+    ${w.type !== 'pelicula' ? reminderPanelHTML(w) : ''}
 
     ${w.synopsis ? `<section class="panel"><h3>Sinopsis</h3><p class="synopsis clamp" id="synopsis">${esc(w.synopsis)}</p><button class="link-btn" id="more">Ver más</button></section>` : ''}
 
@@ -1158,6 +1280,9 @@ async function renderDetail(root, id) {
     await saveWork(w);
     $$('#status-chips .chip', root).forEach((x) => x.classList.toggle('on', x === c));
     $('#st-hint', root).textContent = statusHint(w.status, w.type);
+    // en pausa no llegan avisos de estreno
+    if ($('#rem-state', root)) $('#rem-state', root).textContent = remStateText(w);
+    refreshBells();
     if (w.status === 'terminado') { const r = c.getBoundingClientRect(); confetti(r.left + r.width / 2, r.top); vibrate(30); }
   });
 
@@ -1189,6 +1314,8 @@ async function renderDetail(root, id) {
       await saveWork(w); render({ keepScroll: true });
     }
   });
+
+  bindReminderPanel(w, root);
 
   // notas (guardado automático)
   const notes = $('#notes', root);
@@ -1458,6 +1585,9 @@ async function start() {
   setTimeout(() => $('#splash')?.remove(), 1200);
   updateOnline();
   setTimeout(checkNewSeasons, 5000);
+  setTimeout(notifyOnOpen, 1800);
+  // si la app queda abierta, la campanita se pone al día cada minuto
+  setInterval(() => { if (!document.hidden) refreshBells(); }, 60000);
   addEventListener('online', updateOnline);
   addEventListener('offline', updateOnline);
   handleShareTarget();
