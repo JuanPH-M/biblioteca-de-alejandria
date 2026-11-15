@@ -1,3 +1,4 @@
+import { imageURL } from './security.js';
 // Descubrir: recomendaciones de manhwas, mangas, animes, series y películas.
 // Para ti (según lo que tienes y te gustó), tendencias, novedades y clásicos.
 import { $, $$, esc, toast, ICONS, openSheet, vibrate } from './ui.js';
@@ -57,7 +58,7 @@ function cardHTML(r, kind, i = 0, because = '') {
   items.set(keyOf(r), { r, kind });
   const have = inLibrary(r);
   return `<button class="dcard" data-key="${esc(keyOf(r))}" style="--i:${Math.min(i, 12)}">
-    <span class="dcover">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()">` : ''}<i>${esc(r.title.slice(0, 2).toUpperCase())}</i>
+    <span class="dcover">${r.cover ? `<img src="${esc(imageURL(r.cover))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-image-fade>` : ''}<i>${esc(r.title.slice(0, 2).toUpperCase())}</i>
       ${have ? '<span class="dhave">✓ La tienes</span>' : r.score ? `<span class="dscore">★ ${(r.score / 10).toFixed(1)}</span>` : ''}</span>
     <b>${esc(r.title)}</b>
     <small>${esc(because ? `Porque te gustó ${because}` : [r.year, r.genres?.[0] || (r.extra || '').split(' · ')[0]].filter(Boolean).join(' · '))}</small>
@@ -97,7 +98,7 @@ export function renderDiscover(root, param) {
   <div class="seg mode-seg" id="d-mode"><button class="${dmode === 'leer' ? 'on' : ''}" data-mode="leer">📖 Para leer</button><button class="${dmode === 'ver' ? 'on' : ''}" data-mode="ver">📺 Para ver</button></div>
   <div class="chips scroll-x dtabs" id="d-tabs">${tabs.map(([k, e, l]) => `<button class="chip ${k === tab ? 'on' : ''}" data-tab="${k}">${e} ${l}</button>`).join('')}</div>
   <div id="d-body"></div>
-  <p class="attr">Datos de <a href="${ATTRIBUTION.anilist.url}" target="_blank" rel="noopener">AniList</a>, <a href="${ATTRIBUTION.tvmaze.url}" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA 4.0) y <a href="${ATTRIBUTION.wikipedia.url}" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0)</p>`;
+  <p class="attr">Datos de <a href="${ATTRIBUTION.anilist.url}" target="_blank" rel="noopener noreferrer">AniList</a>, <a href="${ATTRIBUTION.tvmaze.url}" target="_blank" rel="noopener noreferrer">TVmaze</a> (CC BY-SA 4.0) y <a href="${ATTRIBUTION.wikipedia.url}" target="_blank" rel="noopener noreferrer">Wikipedia</a> (CC BY-SA 4.0)</p>`;
   $('#d-tabs', root).addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]');
     if (!b || b.dataset.tab === tab) return;
@@ -220,11 +221,11 @@ export function openPreview(r, kind) {
   const attr = ATTRIBUTION[r.source];
   const s = openSheet(`
     <div class="dprev">
-      <div class="dprev-cover">${r.cover ? `<img src="${esc(r.cover)}" alt="" referrerpolicy="no-referrer">` : ''}</div>
+      <div class="dprev-cover">${r.cover ? `<img src="${esc(imageURL(r.cover))}" alt="" referrerpolicy="no-referrer">` : ''}</div>
       <div class="dprev-info">
         <span class="badge type-${kind}">${TYPES[kind]?.label || ''}</span>
         <h3>${esc(r.title)}</h3>
-        <p class="muted small">${esc([r.year, r.extra, r.pubStatus, r.total ? `${r.total} ${TYPES[kind]?.reading ? 'capítulos' : kind === 'pelicula' ? '' : 'episodios'}` : ''].filter(Boolean).join(' · '))}</p>
+        <p class="muted small">${esc([r.year, r.extra, r.pubStatus, r.total ? `${esc(r.total)} ${TYPES[kind]?.reading ? 'capítulos' : kind === 'pelicula' ? '' : 'episodios'}` : ''].filter(Boolean).join(' · '))}</p>
         ${r.score ? `<p class="dprev-score">★ ${(r.score / 10).toFixed(1)} <small>/ 10</small></p>` : ''}
       </div>
     </div>

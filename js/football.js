@@ -1,3 +1,4 @@
+import { safeURL, imageURL, safeColor } from './security.js';
 // Fútbol (dentro de Deportes) con datos públicos de ESPN: clubes y selecciones, ligas con calendario y tabla completos,
 // y cada partido con goles, tarjetas, cambios, alineaciones y estadísticas.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, hueOf, vibrate, imageToDataURL } from './ui.js';
@@ -24,7 +25,7 @@ function leagueStyle(lg) {
 }
 function leagueBadge(lg, size = '') {
   const st = leagueStyle(lg);
-  if (lg.logo) return `<span class="lg-badge logo ${size}"><img src="${esc(lg.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  if (lg.logo) return `<span class="lg-badge logo ${size}"><img src="${esc(imageURL(lg.logo))}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
   return `<span class="lg-badge ${size}" style="--c1:${st.c1};--c2:${st.c2}">${st.flag}</span>`;
 }
 // "3rd in Colombian Primera A" → "3.º en Liga BetPlay"
@@ -84,7 +85,7 @@ export function renderFootball(root, param) {
     <i class="tabs2-pill" style="--x:${TABS.indexOf(tab)}"></i>
   </div>
   <div id="fb-body"></div>
-  <p class="attr">${esc(ATTRIBUTION.espn.text)} · <a href="${ATTRIBUTION.espn.url}" target="_blank" rel="noopener">ESPN</a></p></div>`;
+  <p class="attr">${esc(ATTRIBUTION.espn.text)} · <a href="${ATTRIBUTION.espn.url}" target="_blank" rel="noopener noreferrer">ESPN</a></p></div>`;
   $('.tabs2', root).addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]');
     if (!b || b.dataset.tab === tab) return;
@@ -115,7 +116,7 @@ function drawTeams(body) {
     <div id="fb-next-hero"></div>
     <button class="add-big" id="add-team"><span>＋</span><b>Agregar equipo o selección</b></button>
     <div class="fb-grid" id="team-grid">${S.teams.map((t, i) => `
-      <button class="fb-tile team-tile" data-team="${esc(t.id)}" style="--i:${i};--tc1:${t.color1 || '#16a34a'};--tc2:${t.color2 || '#0f172a'}">
+      <button class="fb-tile team-tile" data-team="${esc(t.id)}" style="--i:${i};--tc1:${safeColor(t.color1, '#16a34a')};--tc2:${safeColor(t.color2, '#0f172a')}">
         ${avatar(t, 'md')}
         <b>${esc(t.name)}</b>
         <small>${esc(leagueName(t.league) || t.country || '')}</small>
@@ -205,7 +206,7 @@ function openTeamSearch() {
 function openTeam(t) {
   if (!t) return;
   const s = openSheet(`
-    <div class="fb-hero" style="--c1:${t.color1 || '#16a34a'};--c2:${t.color2 || '#111'}">
+    <div class="fb-hero" style="--c1:${safeColor(t.color1, '#16a34a')};--c2:${safeColor(t.color2, '#111')}">
       <div class="fb-hero-av">${avatar(t, 'xl')}</div>
       <h3>${esc(t.name)}</h3>
       <p class="muted small" id="tm-sub">${esc(standingEs(t.standing, t.league) || leagueName(t.league) || t.country || '')}</p>
@@ -523,7 +524,7 @@ function editCrest(name, current, onSave) {
     <h3 class="sheet-title">Escudo de ${esc(name)}</h3>
     <p class="muted small">Pega el link de una imagen o elige una de tu galería. Se guarda solo en tu teléfono.</p>
     <div class="crest-edit">
-      <div class="crest-prev" id="cr-prev">${current ? `<img src="${esc(current)}" alt="">` : '<span>🛡️</span>'}</div>
+      <div class="crest-prev" id="cr-prev">${current ? `<img src="${esc(imageURL(current))}" alt="">` : '<span>🛡️</span>'}</div>
       <div class="grow col-btns">
         <input id="cr-url" type="url" placeholder="https://…" value="${current && !current.startsWith('data:') ? esc(current) : ''}">
         <div class="row-btns sm">
@@ -534,8 +535,8 @@ function editCrest(name, current, onSave) {
     </div>
     <div class="row-btns"><button class="btn ghost" id="cr-cancel">Cancelar</button><button class="btn primary" id="cr-save">Guardar escudo</button></div>`);
   let logo = current || '';
-  const prev = () => { $('#cr-prev', s.el).innerHTML = logo ? `<img src="${esc(logo)}" alt="" onerror="this.replaceWith(document.createTextNode('⚠️'))">` : '<span>🛡️</span>'; };
-  $('#cr-url', s.el).addEventListener('input', debounce((e) => { logo = e.target.value.trim(); prev(); }, 300));
+  const prev = () => { $('#cr-prev', s.el).innerHTML = logo ? `<img src="${esc(imageURL(logo))}" alt="" data-image-warning>` : '<span>🛡️</span>'; };
+  $('#cr-url', s.el).addEventListener('input', debounce((e) => { logo = safeURL(e.target.value.trim()); prev(); }, 300));
   $('#cr-file', s.el).addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;

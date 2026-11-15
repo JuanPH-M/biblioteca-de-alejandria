@@ -1,3 +1,4 @@
+import { imageURL, safeColor } from './security.js';
 // Deportes: fútbol, NBA, MLB, Fórmula 1 y UFC en un solo lugar.
 // Solo textos, números y colores propios: ningún logo de equipos, ligas o marcas.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, relTime, hueOf, initials, vibrate } from './ui.js';
@@ -61,11 +62,11 @@ export function avatar(t, size = '') {
   const name = t.name || '?';
   // escudo propio que subiste para ese equipo de fútbol
   const mine = t.logo ? t : S.teams.find((x) => x.id === t.id && x.logo);
-  if (mine?.logo) return `<span class="team-av logo ${size}"><img src="${esc(mine.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('logo');this.remove()"></span>`;
+  if (mine?.logo) return `<span class="team-av logo ${size}"><img src="${esc(imageURL(mine.logo))}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
   const c1 = t.color1 || `hsl(${hueOf(name)} 65% 42%)`;
   const c2 = t.color2 && t.color2.toLowerCase() !== t.color1?.toLowerCase() ? t.color2 : `hsl(${(hueOf(name) + 40) % 360} 65% 28%)`;
   const label = (t.short && t.short.length <= 4 ? t.short : initials(name)).toUpperCase();
-  return `<span class="team-av ${size}" style="--c1:${c1};--c2:${c2}">${esc(label)}</span>`;
+  return `<span class="team-av ${size}" style="--c1:${safeColor(c1)};--c2:${safeColor(c2)}">${esc(label)}</span>`;
 }
 
 // Estado del partido en español
@@ -160,7 +161,7 @@ function drawSport(sub) {
   if (sport === 'ufc') return drawUFC(body);
   return drawLeague(body, sport);
 }
-const attrHTML = (a) => `<p class="attr">${esc(ATTRIBUTION[a].text)} · <a href="${ATTRIBUTION[a].url}" target="_blank" rel="noopener">${esc(ATTRIBUTION[a].name)}</a></p>`;
+const attrHTML = (a) => `<p class="attr">${esc(ATTRIBUTION[a].text)} · <a href="${ATTRIBUTION[a].url}" target="_blank" rel="noopener noreferrer">${esc(ATTRIBUTION[a].name)}</a></p>`;
 
 // ======================= NBA / MLB =======================
 const leagueState = { nba: { view: 'partidos', day: 0 }, mlb: { view: 'partidos', day: 0 } };
@@ -548,7 +549,7 @@ function openRace(x) {
       <ul class="f1-sessions">${x.sessions.map((k) => `<li class="${k.ts && new Date(k.ts) < Date.now() ? 'past' : ''} ${k.label === 'Carrera' ? 'race' : ''}"><span>${esc(k.label)}</span><b>${k.ts ? esc(fmtDay(k.ts)) + ' · ' + esc(fmtTime(k.ts)) : 'Por confirmar'}</b></li>`).join('')}</ul>
     </div>
     ${past ? `<div class="seg mh-tabs" id="rc-tabs">${kinds.map(([k, l], i) => `<button class="${i ? '' : 'on'}" data-k="${k}">${l}</button>`).join('')}</div><div id="rc-body">${loading()}</div>
-      <button class="btn primary block video-btn" data-open="${esc(ytSearch(`F1 ${x.season} ${x.name} highlights`))}">${ICONS.play} Ver resumen en YouTube</button>` : ''}`, { cls: 'tall' });
+      <button class="btn primary block video-btn" data-open="${esc(ytSearch(`F1 ${esc(x.season)} ${x.name} highlights`))}">${ICONS.play} Ver resumen en YouTube</button>` : ''}`, { cls: 'tall' });
   tickCountdowns(s.el);
   s.el.addEventListener('click', (e) => { const o = e.target.closest('[data-open]'); if (o) openUrl(o.dataset.open); });
   if (!past) return;
@@ -560,7 +561,7 @@ function openRace(x) {
       if (!s.open) return;
       box.innerHTML = list.length ? `<ul class="f1-stand result">${list.map((r, i) => `<li style="--i:${Math.min(i, 20)}" class="${i < 3 ? 'top' : ''}"><span class="rank r${i + 1}">${esc(r.pos)}</span>
         <span class="grow"><b>${esc(r.name)}${r.fastest ? ' <i class="tag fast">⏱ Vuelta rápida</i>' : ''}</b><small>${esc(r.team)}${kind !== 'qualifying' && r.grid ? ` · salió ${esc(r.grid)}.º` : ''}</small></span>
-        <span class="f1-pts"><b>${esc(kind === 'qualifying' ? r.time : r.points ? `+${r.points}` : '')}</b><small>${esc(kind === 'qualifying' ? '' : statusF1(r.time))}</small></span></li>`).join('')}</ul>`
+        <span class="f1-pts"><b>${esc(kind === 'qualifying' ? r.time : r.points ? `+${esc(r.points)}` : '')}</b><small>${esc(kind === 'qualifying' ? '' : statusF1(r.time))}</small></span></li>`).join('')}</ul>`
         : '<p class="muted small center pad">Los resultados aún no están disponibles.</p>';
     } catch { if (s.open) box.innerHTML = errorBox(); }
   };
@@ -623,7 +624,7 @@ async function drawUFC(body, force = false) {
       <button class="ufc-hero" data-hero="${esc(next.id)}">
         <span class="ufc-kicker">${next.state === 'in' ? '<i class="live-dot"></i> En vivo ahora' : 'Próximo evento'}</span>
         <h2>${esc(next.name)}</h2>
-        ${main && main.fighters.length === 2 ? `<div class="ufc-vs"><div><b>${esc(main.fighters[0].name)}</b><small>${esc(main.fighters[0].record)}${main.fighters[0].country ? ` · ${esc(main.fighters[0].country)}` : ''}</small></div><span>VS</span><div><b>${esc(main.fighters[1].name)}</b><small>${esc(main.fighters[1].record)}${main.fighters[1].country ? ` · ${esc(main.fighters[1].country)}` : ''}</small></div></div><p class="ufc-weight">${esc(weightEs(main.weight))} · ${main.rounds} asaltos</p>` : ''}
+        ${main && main.fighters.length === 2 ? `<div class="ufc-vs"><div><b>${esc(main.fighters[0].name)}</b><small>${esc(main.fighters[0].record)}${main.fighters[0].country ? ` · ${esc(main.fighters[0].country)}` : ''}</small></div><span>VS</span><div><b>${esc(main.fighters[1].name)}</b><small>${esc(main.fighters[1].record)}${main.fighters[1].country ? ` · ${esc(main.fighters[1].country)}` : ''}</small></div></div><p class="ufc-weight">${esc(weightEs(main.weight))} · ${esc(main.rounds)} asaltos</p>` : ''}
         <div class="f1-cd"><small>${next.state === 'in' ? 'Empezó' : 'Empieza en'}</small><b ${next.state === 'in' ? '' : `data-cd="${esc(next.ts)}"`}>${next.state === 'in' ? esc(fmtTime(next.ts)) : ''}</b></div>
         <small class="muted">📅 ${esc(fmtLong(next.ts))}${next.venue ? ` · 📍 ${esc(next.venue)}` : ''}</small>
       </button>` : '';

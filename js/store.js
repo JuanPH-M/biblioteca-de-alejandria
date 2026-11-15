@@ -1,3 +1,4 @@
+import { safeURL, validateBackup } from './security.js';
 // Estado de la app y acciones sobre las obras.
 import { db, getSetting, setSetting, uid } from './db.js';
 import { parseLink, normKey, nextChapterUrl, chapterUrl, findWorkForLink, seriesUrl, siteSearchUrl } from './links.js';
@@ -320,8 +321,9 @@ let pickBrowser = null; // lo registra la interfaz: hoja para elegir navegador
 export function setBrowserPicker(fn) { pickBrowser = fn; }
 // onOpen se llama cuando el link de verdad se abre (con "Preguntar cada vez", después de elegir)
 export function openUrl(url, { browser, onOpen } = {}) {
+  url = safeURL(url);
+  if (!url) return;
   const k = browser || S.settings.browser || 'system';
-  if (!/^https?:\/\//i.test(url)) { tapLink(url, true); onOpen?.(); return; }
   if (k === 'ask' && pickBrowser) { pickBrowser(url, onOpen); return; }
   if (k === 'app') {
     // misma ventana: se espera un instante para que se guarde el avance antes de salir
@@ -499,7 +501,7 @@ export async function buildBackup() {
 }
 
 export async function restoreBackup(data, mode = 'merge') {
-  if (!data || data.app !== 'biblioteca-de-alejandria' || !Array.isArray(data.works)) throw new Error('El archivo no es un respaldo válido de Biblioteca de Alejandría.');
+  validateBackup(data);
   const works = data.works.filter((w) => w && w.id && w.title).map((w) => newWork(w));
   if (mode === 'replace') {
     await Promise.all(['works', 'patterns', 'teams'].map((s) => db.clear(s)));

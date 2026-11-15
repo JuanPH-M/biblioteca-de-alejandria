@@ -1,3 +1,4 @@
+import { imageURL } from './security.js';
 // Utilidades de interfaz: escape, toasts, hojas modales, animaciones.
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -5,6 +6,18 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.motion === 'off';
+
+// load/error no burbujean: captura también imágenes añadidas por vistas y modales.
+document.addEventListener('load', (e) => {
+  if (e.target instanceof HTMLImageElement && e.target.hasAttribute('data-image-fade')) e.target.classList.add('ok');
+}, true);
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  img.parentElement?.classList.remove('logo');
+  if (img.hasAttribute('data-image-warning')) img.replaceWith(document.createTextNode('⚠️'));
+  else img.remove();
+}, true);
 
 export function debounce(fn, ms) {
   let t;
@@ -31,7 +44,7 @@ export function coverHTML(work, cls = '') {
   const h = hueOf(work.title);
   const ph = `<div class="cover-ph" style="--h:${h}"><span>${esc(initials(work.title))}</span></div>`;
   if (!work.cover) return `<div class="cover ${cls}">${ph}</div>`;
-  return `<div class="cover ${cls}">${ph}<img src="${esc(work.cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"></div>`;
+  return `<div class="cover ${cls}">${ph}<img src="${esc(imageURL(work.cover))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-image-fade></div>`;
 }
 
 // ---------- toasts ----------
