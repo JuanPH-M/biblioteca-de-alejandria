@@ -438,12 +438,12 @@ function openLeague(lg) {
         body.innerHTML = `<div class="mh-view">${r.data.length ? `${r.data.map((g) => `
           ${r.data.length > 1 || g.name ? `<h4 class="st-name">${esc(g.name || '')}</h4>` : ''}
           <table class="lg-table fb-table"><thead><tr><th>#</th><th class="tl">Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>DG</th><th>Pts</th></tr></thead><tbody>
-          ${g.rows.map((x, i) => `<tr style="--i:${Math.min(i, 20)};${x.note?.color ? `--nc:${esc(x.note.color)}` : ''}" class="${x.note?.color ? 'noted' : ''} ${S.teams.some((t) => t.id === x.id) ? 'is-fav' : ''}" data-team="${esc(x.id)}">
-            <td><span class="rank r${x.rank || i + 1}">${x.rank || i + 1}</span></td>
+          ${g.rows.map((x, i) => `<tr style="--i:${Math.min(i, 20)};${x.note?.color ? `--nc:${safeColor(x.note.color)}` : ''}" class="${x.note?.color ? 'noted' : ''} ${S.teams.some((t) => t.id === x.id) ? 'is-fav' : ''}" data-team="${esc(x.id)}">
+            <td><span class="rank r${esc(x.rank || i + 1)}">${esc(x.rank || i + 1)}</span></td>
             <td class="tl"><div class="tcell">${avatar(x, 'xs')}<span>${esc(x.name)}</span></div></td>
             <td>${esc(x.pj)}</td><td>${esc(x.w)}</td><td>${esc(x.d)}</td><td>${esc(x.l)}</td><td>${esc(x.gd)}</td><td><b>${esc(x.pts)}</b></td></tr>`).join('')}
           </tbody></table>`).join('')}
-          ${notes.length ? `<ul class="st-legend">${notes.map((n) => `<li><i style="--nc:${esc(n.color)}"></i>${esc(n.text)}</li>`).join('')}</ul>` : ''}
+          ${notes.length ? `<ul class="st-legend">${notes.map((n) => `<li><i style="--nc:${safeColor(n.color)}"></i>${esc(n.text)}</li>`).join('')}</ul>` : ''}
           <p class="muted small center">Toca un equipo para seguirlo.</p>${updated(r)}`
           : '<p class="muted small center pad">Este torneo no tiene tabla de posiciones disponible.</p>'}</div>`;
       } catch { if (s.open) body.innerHTML = errorBox('Este torneo no tiene tabla de posiciones disponible.'); }
@@ -564,7 +564,7 @@ function timelineHTML(d) {
         : e.kind === 'og' ? `<b>${esc(e.a)}</b><small>Autogol</small>`
           : e.kind === 'penmiss' ? `<b>${esc(e.a)}</b><small>Penal fallado</small>`
             : `<b>${esc(e.a)}</b>`;
-    return `<li class="tl-ev ${e.side} k-${e.kind}" style="--i:${Math.min(i, 30)}"><span class="tl-min">${esc(e.min)}</span><span class="tl-ic">${EV_ICON[e.kind]}</span><span class="tl-what">${what}</span></li>`;
+    return `<li class="tl-ev ${esc(e.side)} k-${esc(e.kind)}" style="--i:${Math.min(i, 30)}"><span class="tl-min">${esc(e.min)}</span><span class="tl-ic">${EV_ICON[e.kind]}</span><span class="tl-what">${what}</span></li>`;
   }).join('')}</ul>`;
 }
 function lineupsHTML(d, g) {

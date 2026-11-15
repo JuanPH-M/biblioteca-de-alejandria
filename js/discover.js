@@ -232,7 +232,7 @@ export function openPreview(r, kind) {
     ${r.genres?.length ? `<div class="chips wrap">${r.genres.slice(0, 6).map((g) => `<span class="chip">${esc(g)}</span>`).join('')}</div>` : ''}
     ${r.synopsis ? `<p class="dprev-syn" id="dp-syn">${esc(r.synopsis)}</p>${r.synopsis.length > 320 ? '<button class="link-btn small" id="dp-more">Leer más</button>' : ''}` : ''}
     <div class="col-btns dprev-actions">
-      ${have ? `<button class="btn primary block" data-open="${have.id}">${ICONS.book} Ya la tienes · abrir</button>`
+      ${have ? `<button class="btn primary block" data-open="${esc(have.id)}">${ICONS.book} Ya la tienes · abrir</button>`
         : `<button class="btn primary block" data-add="pendiente">＋ Agregar como pendiente</button>
            <button class="btn block" data-add="viendo">${TYPES[kind]?.reading ? '📖 Ya la estoy leyendo' : '▶ Ya la estoy viendo'}</button>`}
     </div>
