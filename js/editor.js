@@ -81,7 +81,7 @@ export function openPasteSheet({ work = null, url = '' } = {}) {
     <h3 class="sheet-title">${work ? `Agregar link a <span class="accent">${esc(work.title)}</span>` : 'Pegar link de capítulo'}</h3>
     <p class="muted small">${work ? 'Pega el link de la plataforma o del capítulo.' : `Reconozco ${KNOWN_SITES.join(', ')}, plataformas de streaming y aprendo sitios nuevos.`}</p>
     <div class="field-row">
-      <input id="pl-url" type="url" inputmode="url" placeholder="https://…" value="${esc(url)}" autocomplete="off">
+      <input id="pl-url" aria-label="Link del capítulo" type="url" inputmode="url" placeholder="https://…" value="${esc(url)}" autocomplete="off">
       <button class="btn" id="pl-clip" title="Pegar del portapapeles">Pegar</button>
     </div>
     <div id="pl-report"></div>
@@ -220,7 +220,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       <div class="cover-edit">
         <div id="ed-cover-prev">${coverHTML(w, 'sm')}</div>
         <div class="cover-actions">
-          <input id="ed-cover" type="url" placeholder="Link de imagen (https://…)" value="${w.cover && !w.cover.startsWith('data:') ? esc(w.cover) : ''}">
+          <input id="ed-cover" aria-label="Link de la portada" type="url" placeholder="Link de imagen (https://…)" value="${w.cover && !w.cover.startsWith('data:') ? esc(w.cover) : ''}">
           <div class="row-btns sm">
             <label class="btn sm">${ICONS.upload} Galería<input type="file" accept="image/*" id="ed-file" hidden></label>
             <button class="btn sm ghost" id="ed-cover-del">Quitar</button>
@@ -235,7 +235,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
 
     <div class="field" id="ed-links-field"><span>Links (dónde lo ${TYPES[w.type].reading ? 'lees' : 'ves'})</span>
       <div id="ed-links"></div>
-      <div class="field-row"><input id="ed-newlink" type="url" inputmode="url" placeholder="Pega un link…"><button class="btn sm" id="ed-addlink">Añadir</button></div>
+      <div class="field-row"><input id="ed-newlink" aria-label="Link de lectura o reproducción" type="url" inputmode="url" placeholder="Pega un link…"><button class="btn sm" id="ed-addlink">Añadir</button></div>
       <div id="ed-linkreport"></div>
       <label class="mini chap-url"><small>Página de todos los capítulos (opcional: la app la deduce sola; ponla solo si "Ver capítulos" abre una página equivocada)</small>
         <input id="ed-chapters" type="url" inputmode="url" placeholder="https://…/manga/nombre-de-la-obra/" value="${esc(w.chaptersUrl || '')}"></label>

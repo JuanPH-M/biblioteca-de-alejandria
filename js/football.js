@@ -177,7 +177,7 @@ function openTeamSearch() {
   const s = openSheet(`
     <h3 class="sheet-title">Agregar equipo</h3>
     <div class="searchbar in-sheet"><span class="ic">${ICONS.search}</span>
-      <input id="ts-q" type="search" placeholder="Club o selección (p. ej. Nacional, Colombia)" autocomplete="off" enterkeyhint="search"></div>
+      <input id="ts-q" aria-label="Buscar equipo" type="search" placeholder="Club o selección (p. ej. Nacional, Colombia)" autocomplete="off" enterkeyhint="search"></div>
     <div id="ts-res"><p class="muted small center pad">Escribe al menos 3 letras.</p></div>`, { cls: 'tall' });
   const q = $('#ts-q', s.el), res = $('#ts-res', s.el);
   let token = 0, found = [];
@@ -355,7 +355,7 @@ function openLeagueSearch(intl = false) {
   const s = openSheet(`
     <h3 class="sheet-title">${intl ? 'Agregar torneo internacional' : 'Agregar liga o copa'}</h3>
     <div class="searchbar in-sheet"><span class="ic">${ICONS.search}</span>
-      <input id="ls-q" type="search" placeholder="${intl ? 'Nombre (p. ej. Concacaf, Mundial de Clubes)' : 'Nombre o país (p. ej. Liga MX, Chile, Eredivisie)'}" autocomplete="off" enterkeyhint="search"></div>
+      <input id="ls-q" aria-label="Buscar liga o torneo" type="search" placeholder="${intl ? 'Nombre (p. ej. Concacaf, Mundial de Clubes)' : 'Nombre o país (p. ej. Liga MX, Chile, Eredivisie)'}" autocomplete="off" enterkeyhint="search"></div>
     <div id="ls-res"></div>
     ${groups.map(([title, pops]) => `
     <h4 class="ls-title">${title}</h4>
@@ -526,7 +526,7 @@ function editCrest(name, current, onSave) {
     <div class="crest-edit">
       <div class="crest-prev" id="cr-prev">${current ? `<img src="${esc(imageURL(current))}" alt="">` : '<span>🛡️</span>'}</div>
       <div class="grow col-btns">
-        <input id="cr-url" type="url" placeholder="https://…" value="${current && !current.startsWith('data:') ? esc(current) : ''}">
+        <input id="cr-url" aria-label="Link del escudo" type="url" placeholder="https://…" value="${current && !current.startsWith('data:') ? esc(current) : ''}">
         <div class="row-btns sm">
           <label class="btn sm">${ICONS.upload} Galería<input type="file" accept="image/*" id="cr-file" hidden></label>
           <button class="btn sm ghost" id="cr-del">Quitar</button>

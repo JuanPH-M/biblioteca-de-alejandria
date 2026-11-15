@@ -600,7 +600,7 @@ export function renderImport(root) {
       <ul class="bm-list">${items.map((it, i) => {
         const ex = existingKey.get(normKey(it.title));
         return `<li class="bm ${it.selected ? '' : 'off'}" data-i="${esc(i)}" style="--i:${Math.min(i, 20)}">
-          <label class="check"><input type="checkbox" data-sel ${it.selected ? 'checked' : ''}><i></i></label>
+          <label class="check"><input type="checkbox" aria-label="Seleccionar ${esc(it.title)}" data-sel ${it.selected ? 'checked' : ''}><i></i></label>
           <div class="bm-main">
             <input class="bm-title" data-f="title" value="${esc(it.title)}" aria-label="Nombre">
             <div class="bm-meta">

@@ -1960,3 +1960,11 @@ input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 
   .carousel .c-cover { transform: none; opacity: 1; }
   .spot-pause { display: none; }
 }
+
+/* Las etiquetas permanecen iguales; el área interactiva incluye 44 px. */
+button.chip, .seg button, .tabs2 button, .sport-pill, .season-chip, .day-chips button, .paste-btn, .num-chip, .ep-spoil { min-width: 44px; min-height: 44px; }
+.day-chips { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 3px; }
+summary { min-height: 44px; align-content: center; }
+.check { display: grid; place-items: center; min-width: 44px; min-height: 44px; }
+.check:focus-within i { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+@media (pointer: coarse) { .c-item { scroll-snap-stop: always; } }
