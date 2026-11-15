@@ -1,3 +1,4 @@
+import { safeURL, imageURL } from './security.js';
 // Editor de obras (agregar/editar) y hoja "Pegar link".
 import { $, $$, esc, openSheet, whenSettled, toast, debounce, imageToDataURL, ICONS, coverHTML, confetti, vibrate } from './ui.js';
 import { S, TYPES, STATUSES, TRACK_ONLY, needsLink, statusLabel, statusHint, newWork, saveWork, analyzeUrl, applyLinkToWork, linkFromParsed, savePattern, progressLabel, trimLinks } from './store.js';
@@ -27,7 +28,7 @@ export function linkReportHTML(parsed) {
       return `<div class="lr info">${head}${title}<div class="small">En este sitio el número del link es un código interno, no el capítulo: el capítulo lo llevas con el contador. Tendrás el botón <b>Ver capítulos</b> para elegir el siguiente y <b>Último visto</b> para volver a este.</div></div>`;
     case 'pick':
       return `<div class="lr warn">${head}${title}
-        ${parsed.suggest != null ? `<div>Parece que el capítulo es <b>${esc(parsed.numbers[parsed.suggest].raw)}</b>.</div><div class="row-btns sm"><button class="btn sm primary" data-pick="${parsed.suggest}">Sí, es el capítulo</button></div><div class="small muted">O toca otro número del link:</div>`
+        ${parsed.suggest != null ? `<div>Parece que el capítulo es <b>${esc(parsed.numbers[parsed.suggest].raw)}</b>.</div><div class="row-btns sm"><button class="btn sm primary" data-pick="${esc(parsed.suggest)}">Sí, es el capítulo</button></div><div class="small muted">O toca otro número del link:</div>`
           : `<div class="small">Sitio nuevo: toca el número que corresponde al capítulo.</div>`}
         ${numbersPickerHTML(parsed)}<div class="xsmall muted">Lo recordaré para ${esc(parsed.host)}.</div></div>`;
     default:
@@ -41,7 +42,7 @@ function numbersPickerHTML(parsed) {
   const rawPath = new URL(parsed.url).pathname;
   // ruta con los números resaltados y tocables
   parsed.numbers.forEach((n, i) => {
-    html += esc(safeDecode(rawPath.slice(last, n.start))) + `<button class="num-chip ${parsed.numIndex === i ? 'on' : ''}" data-pick="${i}">${esc(n.raw)}</button>`;
+    html += esc(safeDecode(rawPath.slice(last, n.start))) + `<button class="num-chip ${parsed.numIndex === i ? 'on' : ''}" data-pick="${esc(i)}">${esc(n.raw)}</button>`;
     last = n.end;
   });
   html += esc(safeDecode(rawPath.slice(last)));
@@ -80,7 +81,7 @@ export function openPasteSheet({ work = null, url = '' } = {}) {
     <h3 class="sheet-title">${work ? `Agregar link a <span class="accent">${esc(work.title)}</span>` : 'Pegar link de capítulo'}</h3>
     <p class="muted small">${work ? 'Pega el link de la plataforma o del capítulo.' : `Reconozco ${KNOWN_SITES.join(', ')}, plataformas de streaming y aprendo sitios nuevos.`}</p>
     <div class="field-row">
-      <input id="pl-url" type="url" inputmode="url" placeholder="https://…" value="${esc(url)}" autocomplete="off">
+      <input id="pl-url" aria-label="Link del capítulo" type="url" inputmode="url" placeholder="https://…" value="${esc(url)}" autocomplete="off">
       <button class="btn" id="pl-clip" title="Pegar del portapapeles">Pegar</button>
     </div>
     <div id="pl-report"></div>
@@ -158,7 +159,7 @@ const TYPE_DESC = {
 
 // ---------- hoja: ¿Qué quieres agregar? ----------
 export function openAddChooser(mode = location.hash.startsWith('#/ver') ? 'ver' : 'leer') {
-  const tile = (k, i) => `<button class="add-tile type-${k}" data-add="${k}" style="--i:${i}"><span class="at-emoji">${TYPES[k].emoji}</span><b>${TYPES[k].label}</b><small>${TYPE_DESC[k]}</small></button>`;
+  const tile = (k, i) => `<button class="add-tile type-${k}" data-add="${esc(k)}" style="--i:${i}"><span class="at-emoji">${TYPES[k].emoji}</span><b>${TYPES[k].label}</b><small>${TYPE_DESC[k]}</small></button>`;
   const leer = `<h4 class="add-group">📖 Para leer</h4><div class="add-grid">${tile('manhwa', 0)}${tile('manga', 1)}
       <button class="add-tile link-tile" data-act="paste" style="--i:2"><span class="at-emoji">🔗</span><b>Pegar link</b><small>De un capítulo</small></button></div>`;
   const ver = `<h4 class="add-group">📺 Para ver</h4><div class="add-grid">${tile('anime', 3)}${tile('serie', 4)}${tile('pelicula', 5)}</div>`;
@@ -195,7 +196,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
   const s = openSheet(`
     <div class="sheet-head"><h3 class="sheet-title">${isNew ? 'Agregar obra' : 'Editar obra'}</h3><button class="icon-btn sm" data-x aria-label="Cerrar">${ICONS.close}</button></div>
     <div class="type-picker" id="ed-type" role="radiogroup" aria-label="Tipo">
-      ${Object.entries(TYPES).map(([k, t], i) => `<button class="type-tile type-${k} ${w.type === k ? 'on' : ''}" data-type="${k}" role="radio" aria-checked="${w.type === k}" style="--i:${i}"><span class="tt-emoji">${t.emoji}</span><span class="tt-label">${t.label}</span></button>`).join('')}
+      ${Object.entries(TYPES).map(([k, t], i) => `<button class="type-tile type-${k} ${w.type === k ? 'on' : ''}" data-type="${esc(k)}" role="radio" aria-checked="${w.type === k}" style="--i:${i}"><span class="tt-emoji">${t.emoji}</span><span class="tt-label">${t.label}</span></button>`).join('')}
     </div>
     <label class="field"><span>Nombre</span>
       <div class="ac-wrap">
@@ -208,7 +209,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
 
     <div class="field"><span>Estado</span>
       <div class="chips wrap" id="ed-status">
-        ${Object.entries(STATUSES).map(([k, st]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
+        ${Object.entries(STATUSES).map(([k, st]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${esc(k)}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
       </div>
       <p class="status-hint" id="ed-hint">${esc(statusHint(w.status, w.type))}</p>
     </div>
@@ -219,7 +220,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       <div class="cover-edit">
         <div id="ed-cover-prev">${coverHTML(w, 'sm')}</div>
         <div class="cover-actions">
-          <input id="ed-cover" type="url" placeholder="Link de imagen (https://…)" value="${w.cover && !w.cover.startsWith('data:') ? esc(w.cover) : ''}">
+          <input id="ed-cover" aria-label="Link de la portada" type="url" placeholder="Link de imagen (https://…)" value="${w.cover && !w.cover.startsWith('data:') ? esc(w.cover) : ''}">
           <div class="row-btns sm">
             <label class="btn sm">${ICONS.upload} Galería<input type="file" accept="image/*" id="ed-file" hidden></label>
             <button class="btn sm ghost" id="ed-cover-del">Quitar</button>
@@ -229,19 +230,19 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     </div>
 
     <div class="field" id="ed-plat-field"><span>Dónde la ves</span>
-      <div class="chips wrap" id="ed-plat">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${k}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div>
+      <div class="chips wrap" id="ed-plat">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${esc(k)}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div>
     </div>
 
     <div class="field" id="ed-links-field"><span>Links (dónde lo ${TYPES[w.type].reading ? 'lees' : 'ves'})</span>
       <div id="ed-links"></div>
-      <div class="field-row"><input id="ed-newlink" type="url" inputmode="url" placeholder="Pega un link…"><button class="btn sm" id="ed-addlink">Añadir</button></div>
+      <div class="field-row"><input id="ed-newlink" aria-label="Link de lectura o reproducción" type="url" inputmode="url" placeholder="Pega un link…"><button class="btn sm" id="ed-addlink">Añadir</button></div>
       <div id="ed-linkreport"></div>
       <label class="mini chap-url"><small>Página de todos los capítulos (opcional: la app la deduce sola; ponla solo si "Ver capítulos" abre una página equivocada)</small>
         <input id="ed-chapters" type="url" inputmode="url" placeholder="https://…/manga/nombre-de-la-obra/" value="${esc(w.chaptersUrl || '')}"></label>
     </div>
 
     <div class="field inline"><span>Calificación</span>
-      <div class="stars" id="ed-stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= w.rating ? 'on' : ''}" data-star="${n}" aria-label="${n} estrellas">${ICONS.star}</button>`).join('')}</div>
+      <div class="stars" id="ed-stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= w.rating ? 'on' : ''}" data-star="${esc(n)}" aria-label="${n} estrellas">${ICONS.star}</button>`).join('')}</div>
       <button class="icon-btn sm ${w.favorite ? 'on-fav' : ''}" id="ed-fav" aria-label="Favorito">${ICONS.heart}</button>
     </div>
 
@@ -325,8 +326,8 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       lastResults = res;
       const srcs = [...new Set(res.map((r) => r.source))];
       acBox.innerHTML = res.length ? res.slice(0, 8).map((r, i) => `
-        <button class="ac-item" data-ac="${i}" style="--i:${i}">
-          <span class="ac-cover">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+        <button class="ac-item" data-ac="${esc(i)}" style="--i:${i}">
+          <span class="ac-cover">${r.cover ? `<img src="${esc(imageURL(r.cover))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
           <span class="ac-text"><b>${esc(r.title)}</b><small>${esc([r.year, r.extra, r.pubStatus].filter(Boolean).join(' · '))}</small><small class="ac-gen">${esc(r.genres.slice(0, 3).join(', '))}</small></span>
         </button>`).join('') + `<div class="ac-attr">${srcs.map((x) => esc(ATTRIBUTION[x].text)).join(' · ')}</div>`
         : `<div class="ac-empty">Sin resultados. Puedes escribir los datos y poner la portada a mano.</div>`;
@@ -364,7 +365,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
 
   // --- portada ---
   const refreshCover = () => { $('#ed-cover-prev', el).innerHTML = coverHTML(w, 'sm'); };
-  $('#ed-cover', el).addEventListener('change', (e) => { w.cover = e.target.value.trim(); refreshCover(); });
+  $('#ed-cover', el).addEventListener('change', (e) => { w.cover = safeURL(e.target.value.trim()); refreshCover(); });
   $('#ed-file', el).addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -377,7 +378,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
   if (pendingLink) w.links = trimLinks([linkFromParsed(pendingLink), ...(w.links || [])]);
   const drawLinks = () => {
     $('#ed-links', el).innerHTML = (w.links || []).map((l) => `
-      <div class="link-edit" data-lid="${l.id}">
+      <div class="link-edit" data-lid="${esc(l.id)}">
         <select data-lplat aria-label="Plataforma">${Object.entries(PLATFORMS).map(([k, p]) => `<option value="${k}" ${l.platform === k ? 'selected' : ''}>${p.name}</option>`).join('')}</select>
         <input value="${esc(l.url)}" data-lurl type="url" aria-label="Link">
         <button class="icon-btn xs" data-ldel aria-label="Quitar">${ICONS.close}</button>
@@ -435,7 +436,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     w.title = titleInput.value.trim();
     if (!w.title) { titleInput.focus(); titleInput.classList.add('shake'); setTimeout(() => titleInput.classList.remove('shake'), 500); toast('Escribe el nombre de la obra.'); return; }
     const cv = $('#ed-cover', el).value.trim();
-    if (cv) w.cover = cv;
+    if (cv) w.cover = safeURL(cv);
     const num = (id) => { const x = $(id, el); return x && x.value !== '' ? parseFloat(x.value) : null; };
     if (w.type === 'serie') {
       const season = num('#ed-season'), ep = num('#ed-episode');
@@ -465,7 +466,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       w.platform = '';
     }
     const chap = $('#ed-chapters', el)?.value.trim() || '';
-    w.chaptersUrl = /^https?:\/\//i.test(chap) ? chap : '';
+    w.chaptersUrl = safeURL(chap);
     const saved = await saveWork(w);
     // temporadas de TVmaze para saber cuántos episodios tiene cada una
     if (saved.type === 'serie' && saved.source?.api === 'tvmaze' && !saved.seasons && navigator.onLine) {

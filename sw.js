@@ -1,14 +1,13 @@
 // Service worker: la app funciona sin internet (tu lista vive en IndexedDB).
 // Cambia VERSION en cada publicación para que los teléfonos reciban la actualización.
-const VERSION = 'v2.7.0';
+const VERSION = 'v2.8.0';
 const SHELL = `shell-${VERSION}`;
 const IMAGES = 'covers-v1';
 const ASSETS = [
   './', 'index.html', 'manifest.json', 'css/styles.css',
-  'js/app.js', 'js/db.js', 'js/ui.js', 'js/store.js', 'js/links.js', 'js/api.js', 'js/editor.js', 'js/sections.js', 'js/football.js', 'js/sports.js', 'js/discover.js',
+  'js/carousels.js', 'js/security.js', 'js/app.js', 'js/db.js', 'js/ui.js', 'js/store.js', 'js/links.js', 'js/api.js', 'js/editor.js', 'js/sections.js', 'js/football.js', 'js/sports.js', 'js/discover.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png',
 ];
-const IMAGE_HOSTS = ['s4.anilist.co', 'static.tvmaze.com', 'upload.wikimedia.org', 'thumb.wikimedia.org', 'commons.wikimedia.org', 'icons.duckduckgo.com'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(ASSETS)));
@@ -42,7 +41,7 @@ self.addEventListener('fetch', (e) => {
   }
 
   // Portadas de las APIs: se guardan para verlas sin conexión (máx. ~300)
-  if (req.destination === 'image' || IMAGE_HOSTS.includes(url.hostname)) {
+  if (req.destination === 'image' && url.protocol === 'https:') {
     e.respondWith((async () => {
       const cache = await caches.open(IMAGES);
       const hit = await cache.match(req);
@@ -50,8 +49,10 @@ self.addEventListener('fetch', (e) => {
       try {
         const res = await fetch(req);
         if (res.ok || res.type === 'opaque') {
-          cache.put(req, res.clone());
-          trim(cache, 300);
+          try {
+            await cache.put(req, res.clone());
+            await trim(cache, res.type === 'opaque' ? 40 : 300);
+          } catch { /* La cuota de caché no debe impedir mostrar una imagen descargada. */ }
         }
         return res;
       } catch {

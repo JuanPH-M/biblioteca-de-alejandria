@@ -1,3 +1,5 @@
+import { enhanceCarousels } from './carousels.js';
+import { safeURL, imageURL } from './security.js';
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
 import { S, TYPES, STATUSES, statusLabel, statusHint, loadAll, saveWork, deleteWork, getWork, changeProgress, setProgress, progressLabel, continueTarget, openUrl, filteredWorks, searchWorks, setPref, currentNumber, applyLinkToWork, needsLink, isTrackOnly, platformsOf, seasonEpisodes, seriesTotals, BROWSERS, browserChoices, setBrowserPicker, WEEKDAYS, WEEK_ORDER, reminderActive, reminderText, notifications, unseenCount, markNotifSeen } from './store.js';
@@ -10,7 +12,7 @@ const loadDiscover = () => import('./discover.js');
 const loadSports = () => import('./sports.js');
 
 const view = $('#view');
-export const APP_VERSION = '2.7.0';
+export const APP_VERSION = '2.8.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -26,7 +28,9 @@ export function go(hash) {
 function parseRoute() {
   const h = location.hash.replace(/^#\/?/, '');
   const [name, ...rest] = h.split('/');
-  return { name: name || 'home', param: rest.join('/') ? decodeURIComponent(rest.join('/')) : null };
+  let param = null;
+  try { param = rest.length ? decodeURIComponent(rest.join('/')) : null; } catch { /* ruta mal codificada */ }
+  return { name: name || 'home', param };
 }
 
 let lastRoute = null;
@@ -67,6 +71,7 @@ export async function render({ keepScroll = false } = {}) {
     view.classList.remove('view-enter');
     await fn(view);
     hydrateIcons(view);
+    enhanceCarousels(view);
     if (changed) window.scrollTo(0, 0);
     else if (keepScroll) window.scrollTo(0, scrollY);
   };
@@ -158,8 +163,8 @@ export function cardHTML(w, i = 0) {
   const st = STATUSES[w.status];
   const plats = platformsOf(w);
   const pct = w.total ? Math.min(100, (currentNumber(w) / w.total) * 100) : 0;
-  return `<article class="card ${w.favorite ? 'is-fav' : ''}" data-id="${w.id}" style="--i:${Math.min(i, 20)};--sc:${st?.color}">
-    <a href="#/obra/${w.id}" class="card-link" aria-label="${esc(w.title)}">
+  return `<article class="card ${w.favorite ? 'is-fav' : ''}" data-id="${esc(w.id)}" style="--i:${Math.min(i, 20)};--sc:${st?.color}">
+    <a href="#/obra/${esc(encodeURIComponent(w.id))}" class="card-link" aria-label="${esc(w.title)}">
       ${coverHTML(w)}
       <div class="card-badges">
         <span class="badge type-${w.type}">${TYPES[w.type].label}</span>
@@ -174,7 +179,7 @@ export function cardHTML(w, i = 0) {
       <div class="card-row">
         <span class="card-prog" data-prog>${esc(progressLabel(w))}</span>
         ${w.lastRead || w.watchedAt ? `<span class="card-when">🕒 ${esc(fmtWhen(w.lastRead || w.watchedAt))}</span>` : ''}
-        ${w.rating ? `<span class="card-stars" aria-label="${w.rating} estrellas">★ ${w.rating}</span>` : ''}
+        ${w.rating ? `<span class="card-stars" aria-label="${esc(w.rating)} estrellas">★ ${esc(w.rating)}</span>` : ''}
       </div>
     </div>
   </article>`;
@@ -238,13 +243,13 @@ async function renderHome(root, mode = 'leer') {
   <div class="search-wrap">
     <div class="searchbar">
       <span class="ic">${ICONS.search}</span>
-      <input id="q" type="search" placeholder="${mode === 'leer' ? 'Buscar en lo que lees…' : 'Buscar en lo que ves…'}" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="suggest">
+      <input id="q" type="search" aria-label="Buscar en tu biblioteca" placeholder="${mode === 'leer' ? 'Buscar en lo que lees…' : 'Buscar en lo que ves…'}" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="suggest">
       <button class="icon-btn xs q-clear ${f.q ? '' : 'hidden'}" id="q-clear" aria-label="Borrar búsqueda">${ICONS.close}</button>
       <button class="paste-btn" id="paste-btn">${ICONS.link}<span>Pegar link</span></button>
     </div>
     <div class="suggest" id="suggest" role="listbox" hidden></div>
   </div>
-  ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="tablist" aria-label="Obras destacadas">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${i}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}</div>` : ''}</div>` : ''}
+  ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="group" aria-label="Obras destacadas">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${esc(i)}" aria-pressed="${i === 0}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}<button class="spot-pause" data-spot-pause aria-label="Pausar rotación" aria-pressed="false">Ⅱ</button></div>` : ''}</div>` : ''}
   ${!f.q ? `<div class="pick-row ${total >= 2 ? '' : 'solo'}">
     ${total >= 2 ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>La suerte elige qué ${M.verb}</small></span></button>` : ''}
     <a class="next-pick disc" href="#/descubrir/${mode}"><span class="dice">✨</span><span><b>Descubrir</b><small>${mode === 'leer' ? 'Manhwas y mangas para ti' : 'Animes, series y películas'}</small></span></a>
@@ -254,11 +259,11 @@ async function renderHome(root, mode = 'leer') {
     <div class="sec-head"><h2>Continuar</h2><span class="muted small">${cont.length} en curso</span></div>
     <div class="carousel" id="carousel">
       ${rest.map((w, i) => { const t = continueTarget(w); const pct = progressPct(w); return `
-        <div class="c-item" data-id="${w.id}" style="--i:${i}">
-          <a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}${pct != null ? `<span class="c-bar"><i style="width:${pct}%"></i></span>` : ''}</a>
+        <div class="c-item" data-id="${esc(w.id)}" style="--i:${i}">
+          <a href="#/obra/${esc(encodeURIComponent(w.id))}" class="c-cover">${coverHTML(w)}${pct != null ? `<span class="c-bar"><i style="width:${pct}%"></i></span>` : ''}</a>
           <div class="c-title">${esc(w.title)}</div>
           <div class="c-row"><span class="muted small">${esc(progressLabel(w))}</span>
-          ${t ? `<button class="c-go" data-continue="${w.id}" ${!t.next && t.list ? 'data-mode="list"' : ''} aria-label="Continuar">${ICONS.play}</button>` : ''}</div>
+          ${t ? `<button class="c-go" data-continue="${esc(w.id)}" ${!t.next && t.list ? 'data-mode="list"' : ''} aria-label="Continuar">${ICONS.play}</button>` : ''}</div>
         </div>`; }).join('')}
     </div>
   </section>` : ''}
@@ -270,7 +275,7 @@ async function renderHome(root, mode = 'leer') {
   <div class="${total ? '' : 'hidden'}">
   <div class="sec-head types-head"><h2>Explorar</h2></div>
   <div class="type-cards" id="type-chips" role="tablist">
-    ${[['all', M.emoji, 'Todo'], ...M.types.map((k) => [k, TYPES[k].emoji, TYPES[k].label])].map(([k, emo, l], i) => `<button class="tcard type-${k} ${f.type === k ? 'on' : ''}" data-type="${k}" role="tab" aria-selected="${f.type === k}" style="--i:${i}">
+    ${[['all', M.emoji, 'Todo'], ...M.types.map((k) => [k, TYPES[k].emoji, TYPES[k].label])].map(([k, emo, l], i) => `<button class="tcard type-${k} ${f.type === k ? 'on' : ''}" data-type="${esc(k)}" role="tab" aria-selected="${f.type === k}" style="--i:${i}">
       <span class="tc-emoji">${emo}</span><span class="tc-label">${l}</span><span class="tc-count">${((n) => `${n} ${n === 1 ? 'obra' : 'obras'}`)(k === 'all' ? total : mine.filter((w) => w.type === k).length)}</span></button>`).join('')}
   </div>
   <div class="filter-row">
@@ -300,7 +305,7 @@ async function renderHome(root, mode = 'leer') {
     if (!v) { sug.hidden = true; q.setAttribute('aria-expanded', 'false'); return; }
     const found = searchWorks(v, 6, modeWorks());
     const all = filteredWorks().length;
-    sug.innerHTML = (found.length ? found.map((w, i) => `<button class="sg-item" role="option" data-open-work="${w.id}" style="--i:${i}">
+    sug.innerHTML = (found.length ? found.map((w, i) => `<button class="sg-item" role="option" data-open-work="${esc(w.id)}" style="--i:${i}">
         ${coverHTML(w, 'xs')}
         <span class="sg-text"><b>${esc(w.title)}</b><small>${TYPES[w.type].emoji} ${TYPES[w.type].label} · ${esc(progressLabel(w) || statusLabel(w.status, w.type))}</small></span>
         <span class="sdot" style="--c:${STATUSES[w.status]?.color}"></span></button>`).join('')
@@ -388,7 +393,7 @@ async function renderHome(root, mode = 'leer') {
   }
   // al volver del detalle, la portada regresa a su tarjeta
   if (lastDetailId) {
-    const back = root.querySelector(`[data-id="${lastDetailId}"] .cover`);
+    const back = root.querySelector(`[data-id="${CSS.escape(lastDetailId)}"] .cover`);
     if (back && document.startViewTransition) back.style.viewTransitionName = 'vt-cover';
     lastDetailId = null;
   }
@@ -415,6 +420,12 @@ function startSpotRotation(root, pool) {
   const deck = $('#spot-deck', root);
   if (!deck || pool.length < 2) return;
   let i = 0, holdUntil = 0, startX = null, startY = 0;
+  let hovered = false, held = false, paused = false;
+  const syncPause = () => deck.classList.toggle('rotation-paused', hovered || held || paused || deck.contains(document.activeElement));
+  deck.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { hovered = true; syncPause(); } });
+  deck.addEventListener('pointerleave', () => { hovered = false; held = false; syncPause(); });
+  deck.addEventListener('focusin', syncPause);
+  deck.addEventListener('focusout', () => queueMicrotask(syncPause));
   const show = (n, dir = 1) => {
     i = (n + pool.length) % pool.length;
     const old = deck.querySelector('.spotlight');
@@ -423,14 +434,28 @@ function startSpotRotation(root, pool) {
     const nu = tmp.firstElementChild;
     if (!reducedMotion()) nu.classList.add(dir > 0 ? 'sp-in-next' : 'sp-in-prev');
     old.replaceWith(nu);
-    $$('.spot-dots button', deck).forEach((d, k) => { d.classList.toggle('on', k === i); d.style.animation = 'none'; void d.offsetWidth; d.style.animation = ''; });
+    $$('.spot-dots [data-spot]', deck).forEach((d, k) => {
+      d.classList.toggle('on', k === i);
+      d.setAttribute('aria-pressed', String(k === i));
+      d.querySelector('i')?.replaceWith(document.createElement('i'));
+    });
   };
   const timer = setInterval(() => {
     if (!deck.isConnected) { clearInterval(timer); return; }
-    if (document.hidden || sheetsOpen() || Date.now() < holdUntil) return;
+    if (reducedMotion() || document.hidden || sheetsOpen() || hovered || held || paused || deck.contains(document.activeElement) || Date.now() < holdUntil) return;
     show(i + 1);
   }, SPOT_MS);
   deck.addEventListener('click', (e) => {
+    if (deck.dataset.swiped) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  deck.addEventListener('click', (e) => {
+    const pause = e.target.closest('[data-spot-pause]');
+    if (pause) {
+      e.stopPropagation(); paused = !paused;
+      pause.setAttribute('aria-pressed', String(paused));
+      pause.setAttribute('aria-label', paused ? 'Reanudar rotación' : 'Pausar rotación');
+      pause.textContent = paused ? '▶' : 'Ⅱ'; syncPause(); return;
+    }
     const d = e.target.closest('[data-spot]');
     if (!d) return;
     e.stopPropagation();
@@ -438,22 +463,22 @@ function startSpotRotation(root, pool) {
     show(+d.dataset.spot, +d.dataset.spot >= i ? 1 : -1);
   });
   // deslizar con el dedo
-  deck.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; holdUntil = Date.now() + 60e3; });
+  deck.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; held = true; syncPause(); holdUntil = Date.now() + SPOT_MS; });
   const end = (e) => {
+    held = false; syncPause();
     holdUntil = Date.now() + SPOT_MS;
     if (startX == null) return;
     const dx = e.clientX - startX, dy = e.clientY - startY;
     startX = null;
     if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      const card = deck.querySelector('.spotlight');
-      card.dataset.swiped = '1'; // que el deslizamiento no abra la obra
-      setTimeout(() => delete card.dataset.swiped, 50);
+      deck.dataset.swiped = '1'; // El nuevo elemento tampoco debe abrirse al soltar.
+      setTimeout(() => delete deck.dataset.swiped, 100);
       show(i + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
       vibrate(6);
     }
   };
   deck.addEventListener('pointerup', end);
-  deck.addEventListener('pointercancel', () => { startX = null; holdUntil = Date.now() + SPOT_MS; });
+  deck.addEventListener('pointercancel', () => { startX = null; held = false; syncPause(); holdUntil = Date.now() + SPOT_MS; });
 }
 
 // Tarjeta grande con la obra que estás siguiendo
@@ -487,9 +512,9 @@ function spotlightHTML(w) {
   const t = continueTarget(w);
   const pct = progressPct(w);
   const C = 2 * Math.PI * 26;
-  return `<section class="spotlight" data-id="${w.id}" role="link" tabindex="0" aria-label="Abrir ${esc(w.title)}">
-    <div class="sp-bg">${w.cover ? `<img src="${esc(w.cover)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
-    <a href="#/obra/${w.id}" class="sp-cover" aria-label="${esc(w.title)}">${coverHTML(w)}</a>
+  return `<section class="spotlight" data-id="${esc(w.id)}" role="link" tabindex="0" aria-label="Abrir ${esc(w.title)}">
+    <div class="sp-bg">${w.cover ? `<img src="${esc(imageURL(w.cover))}" alt="" referrerpolicy="no-referrer">` : ''}</div>
+    <a href="#/obra/${esc(encodeURIComponent(w.id))}" class="sp-cover" aria-label="${esc(w.title)}">${coverHTML(w)}</a>
     <div class="sp-info">
       <span class="sp-kicker ${w._why || ''}">${spotKicker(w)}</span>
       <h2>${esc(w.title)}</h2>
@@ -499,11 +524,11 @@ function spotlightHTML(w) {
       </div>
       <div class="sp-actions">
         ${t ? (t.next
-          ? `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} ${TYPES[w.type].unit} ${t.next}</button>${t.last ? `<button class="btn sm ghost-glass" data-continue="${w.id}" data-mode="last">↺ ${TYPES[w.type].unit} ${t.last.n}</button>` : ''}`
+          ? `<button class="btn primary sm" data-continue="${esc(w.id)}">${ICONS.play} ${TYPES[w.type].unit} ${esc(t.next)}</button>${t.last ? `<button class="btn sm ghost-glass" data-continue="${esc(w.id)}" data-mode="last">↺ ${TYPES[w.type].unit} ${esc(t.last.n)}</button>` : ''}`
           : t.list
-            ? `<button class="btn primary sm" data-continue="${w.id}" data-mode="list">📚 Capítulos</button><button class="btn sm ghost-glass" data-continue="${w.id}" data-mode="last">↺ Último</button>`
-            : `<button class="btn primary sm" data-continue="${w.id}">${ICONS.play} Abrir</button>`)
-          : `<a class="btn primary sm" href="#/obra/${w.id}">${ICONS.edit} Registrar avance</a>`}
+            ? `<button class="btn primary sm" data-continue="${esc(w.id)}" data-mode="list">📚 Capítulos</button><button class="btn sm ghost-glass" data-continue="${esc(w.id)}" data-mode="last">↺ Último</button>`
+            : `<button class="btn primary sm" data-continue="${esc(w.id)}">${ICONS.play} Abrir</button>`)
+          : `<a class="btn primary sm" href="#/obra/${esc(encodeURIComponent(w.id))}">${ICONS.edit} Registrar avance</a>`}
       </div>
     </div>
   </section>`;
@@ -526,7 +551,7 @@ function reminderPanelHTML(w) {
     <label class="toggle rem-head"><span><b>🔔 Avisarme cuando salga ${t.unitLong === 'episodio' ? 'episodio' : 'capítulo'} nuevo</b><small>Opcional · te llega a la campanita de la app</small></span><input type="checkbox" id="rem-on" ${r.on ? 'checked' : ''}><i></i></label>
     <div class="rem-body" ${r.on ? '' : 'hidden'}>
       <p class="muted small">¿Qué días sale? Puedes cambiarlos cuando quieras.</p>
-      <div class="day-chips" id="rem-days">${WEEK_ORDER.map((d) => `<button class="day-chip ${r.days?.includes(d) ? 'on' : ''}" data-day="${d}" aria-label="${WEEKDAYS[d]}" aria-pressed="${!!r.days?.includes(d)}">${SHORT_DAYS[d]}</button>`).join('')}</div>
+      <div class="day-chips" id="rem-days">${WEEK_ORDER.map((d) => `<button class="day-chip ${r.days?.includes(d) ? 'on' : ''}" data-day="${esc(d)}" aria-label="${WEEKDAYS[d]}" aria-pressed="${!!r.days?.includes(d)}">${SHORT_DAYS[d]}</button>`).join('')}</div>
       <label class="rem-time"><span>Hora (opcional)</span><input type="time" id="rem-time" value="${esc(r.time || '')}"></label>
       <p class="rem-state" id="rem-state">${remStateText(w, paused)}</p>
     </div>
@@ -578,12 +603,12 @@ export function openNotifications() {
   const withRem = S.works.filter((w) => w.reminder?.on && w.reminder.days?.length);
   const s = openSheet(`
     <div class="sheet-head-row"><h3 class="sheet-title">🔔 Avisos</h3>${list.some((n) => !n.seen) ? '<button class="link-btn small" id="nt-all">Marcar todo como visto</button>' : ''}</div>
-    ${list.length ? `<ul class="notif-list">${list.map((n, i) => `<li class="notif ${n.seen ? 'seen' : ''}" data-key="${esc(n.key)}" data-id="${n.w.id}" style="--i:${i}">
+    ${list.length ? `<ul class="notif-list">${list.map((n, i) => `<li class="notif ${n.seen ? 'seen' : ''}" data-key="${esc(n.key)}" data-id="${esc(n.w.id)}" style="--i:${i}">
         ${coverHTML(n.w, 'xs')}
         <span class="grow"><b>${dayLabel(n)} ${n.back === 0 ? 'sale' : 'salió'} ${TYPES[n.w.type].unitLong === 'episodio' ? 'episodio' : 'capítulo'} nuevo</b><small>${esc(n.w.title)} · vas en ${esc(progressLabel(n.w))}</small></span>
         ${n.seen ? '' : '<i class="notif-dot"></i>'}</li>`).join('')}</ul>`
       : `<div class="empty small"><div class="empty-art"><span>🔕</span></div><h3>No hay avisos</h3><p class="muted">Dentro de cada obra puedes activar <b>🔔 Avisarme</b> y elegir qué días sale. El aviso llega aquí ese día.</p></div>`}
-    ${withRem.length ? `<h4 class="ss-label">Tus recordatorios</h4><ul class="rem-list">${withRem.map((w) => `<li data-id="${w.id}"><span class="grow"><b>${esc(w.title)}</b><small>${esc(reminderText(w))}${reminderActive(w) ? '' : ' · sin avisos (en pausa o apagado)'}</small></span><span class="chev">›</span></li>`).join('')}</ul>` : ''}`, { cls: 'tall' });
+    ${withRem.length ? `<h4 class="ss-label">Tus recordatorios</h4><ul class="rem-list">${withRem.map((w) => `<li data-id="${esc(w.id)}"><span class="grow"><b>${esc(w.title)}</b><small>${esc(reminderText(w))}${reminderActive(w) ? '' : ' · sin avisos (en pausa o apagado)'}</small></span><span class="chev">›</span></li>`).join('')}</ul>` : ''}`, { cls: 'tall' });
   s.el.addEventListener('click', async (e) => {
     if (e.target.closest('#nt-all')) {
       await markNotifSeen(list.map((n) => n.key));
@@ -617,7 +642,7 @@ async function notifyOnOpen() {
 // ---------- Buscar otra obra (desde cualquier pantalla) ----------
 export function openSearchSheet() {
   const recent = [...S.works].sort((a, b) => lastTouch(b) - lastTouch(a)).slice(0, 8);
-  const itemHTML = (w, i) => `<button class="sg-item" data-open-work="${w.id}" style="--i:${i}">
+  const itemHTML = (w, i) => `<button class="sg-item" data-open-work="${esc(w.id)}" style="--i:${i}">
       ${coverHTML(w, 'xs')}
       <span class="sg-text"><b>${esc(w.title)}</b><small>${TYPES[w.type].emoji} ${TYPES[w.type].label} · ${esc(progressLabel(w) || statusLabel(w.status, w.type))}</small></span>
       <span class="sdot" style="--c:${STATUSES[w.status]?.color}"></span></button>`;
@@ -646,7 +671,7 @@ function openRoulette(mode = MODE) {
   const pool = (kind) => S.works.filter((w) => ['pendiente', 'viendo', 'emision', 'pausado'].includes(w.status) && types.includes(w.type) && (kind === 'all' || w.type === kind));
   let kind = 'all';
   const s = openSheet(`<h3 class="sheet-title center">🎲 ¿Qué ${mode === 'leer' ? 'leo' : 'veo'} ahora?</h3>
-    <div class="seg mini3" id="rl-kind"><button class="on" data-k="all">Todo</button>${types.map((k) => `<button data-k="${k}">${TYPES[k].label}</button>`).join('')}</div>
+    <div class="seg mini3" id="rl-kind"><button class="on" data-k="all">Todo</button>${types.map((k) => `<button data-k="${esc(k)}">${TYPES[k].label}</button>`).join('')}</div>
     <div class="slot"><div class="slot-reel" id="rl-reel"></div><div class="slot-glow"></div></div>
     <div class="rl-result" id="rl-result"><p class="muted small center">Toca girar y deja que la suerte decida.</p></div>
     <div class="row-btns"><button class="btn primary lg" id="rl-spin">🎰 Girar</button></div>
@@ -696,7 +721,7 @@ function openRoulette(mode = MODE) {
       const r = reel.parentElement.getBoundingClientRect();
       confetti(r.left + r.width / 2, r.top + r.height / 2, 30);
       result.innerHTML = `<div class="rl-pick"><span class="badge type-${pick.type}">${TYPES[pick.type].emoji} ${TYPES[pick.type].label}</span><h3>${esc(pick.title)}</h3><p class="muted small">${esc(progressLabel(pick, false))} · ${esc(statusLabel(pick.status, pick.type))}</p>
-        <a class="btn primary block" href="#/obra/${pick.id}" id="rl-open">Vamos con esta</a></div>`;
+        <a class="btn primary block" href="#/obra/${esc(encodeURIComponent(pick.id))}" id="rl-open">Vamos con esta</a></div>`;
       $('#rl-open', s.el).onclick = (e) => { e.preventDefault(); go('#/obra/' + pick.id); };
       $('#rl-spin', s.el).textContent = '🎰 Girar otra vez';
       $('#rl-spin', s.el).classList.remove('primary');
@@ -712,15 +737,15 @@ function openQuickActions(el) {
   const s = openSheet(`
     <div class="qa-head">${coverHTML(w, 'sm')}<div class="grow"><span class="badge type-${w.type}">${TYPES[w.type].emoji} ${TYPES[w.type].label}</span><h3>${esc(w.title)}</h3><p class="muted small">${esc(progressLabel(w, false))}</p></div></div>
     <div class="field"><span>Cambiar estado</span><div class="chips wrap" id="qa-status">
-      ${Object.entries(STATUSES).map(([k, st]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
+      ${Object.entries(STATUSES).map(([k, st]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${esc(k)}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
     </div></div>
-    ${isTrackOnly(w) ? `<div class="field"><span>Dónde la veo</span><div class="chips wrap" id="qa-plat">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${k}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div></div>` : ''}
+    ${isTrackOnly(w) ? `<div class="field"><span>Dónde la veo</span><div class="chips wrap" id="qa-plat">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${esc(k)}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div></div>` : ''}
     <div class="qa-grid">
       <button class="qa-btn ${w.favorite ? 'on' : ''}" id="qa-fav">${ICONS.heart}<span>${w.favorite ? 'Quitar favorito' : 'Favorito'}</span></button>
       <button class="qa-btn" id="qa-open">${ICONS.eye}<span>Ver detalle</span></button>
       <button class="qa-btn" id="qa-edit">${ICONS.edit}<span>Editar</span></button>
-      ${t ? `<button class="qa-btn" id="qa-go">${t.next ? ICONS.play : t.list ? '📚' : ICONS.play}<span>${t.next ? `Siguiente · ${TYPES[w.type].unit} ${t.next}` : t.list ? 'Ver capítulos' : 'Abrir link'}</span></button>` : ''}
-      ${t?.last && (t.next || t.list) ? `<button class="qa-btn" id="qa-last">↺<span>Último visto${t.last.n ? ` · ${TYPES[w.type].unit} ${t.last.n}` : ''}</span></button>` : ''}
+      ${t ? `<button class="qa-btn" id="qa-go">${t.next ? ICONS.play : t.list ? '📚' : ICONS.play}<span>${t.next ? `Siguiente · ${TYPES[w.type].unit} ${esc(t.next)}` : t.list ? 'Ver capítulos' : 'Abrir link'}</span></button>` : ''}
+      ${t?.last && (t.next || t.list) ? `<button class="qa-btn" id="qa-last">↺<span>Último visto${t.last.n ? ` · ${TYPES[w.type].unit} ${esc(t.last.n)}` : ''}</span></button>` : ''}
     </div>`);
   $('#qa-status', s.el).addEventListener('click', async (e) => {
     const c = e.target.closest('[data-status]');
@@ -756,7 +781,7 @@ setBrowserPicker((url, onOpen) => {
   try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* */ }
   const s = openSheet(`<h3 class="sheet-title">¿Con qué lo abro?</h3>
     <p class="muted small">${esc(host)}</p>
-    <div class="br-pick">${browserChoices().filter((k) => k !== 'ask').map((k, i) => `<button class="br-opt" data-pick="${k}" style="--i:${i}"><span class="br-emoji">${BROWSERS[k].emoji}</span><span class="grow"><b>${esc(BROWSERS[k].name)}</b></span></button>`).join('')}</div>
+    <div class="br-pick">${browserChoices().filter((k) => k !== 'ask').map((k, i) => `<button class="br-opt" data-pick="${esc(k)}" style="--i:${i}"><span class="br-emoji">${BROWSERS[k].emoji}</span><span class="grow"><b>${esc(BROWSERS[k].name)}</b></span></button>`).join('')}</div>
     <label class="br-remember"><input type="checkbox" id="br-rem"> Usar siempre este navegador</label>`);
   s.el.addEventListener('click', (e) => {
     const b = e.target.closest('[data-pick]');
@@ -861,7 +886,7 @@ export function openCheckIn(w, p = { mode: 'manual' }) {
       <div class="ci-val"><input id="ci-n" type="number" inputmode="decimal" min="0" step="any" value="${val}" aria-label="${t.unitLong}"><small>antes: ${t.unit} ${cur}</small></div>
       <button class="cbtn plus" data-ci="1" aria-label="Uno más">+</button>
     </div>
-    <div class="chips center ci-quick">${[1, 2, 5, 10].map((n) => `<button class="chip" data-add="${n}">+${n}</button>`).join('')}</div>
+    <div class="chips center ci-quick">${[1, 2, 5, 10].map((n) => `<button class="chip" data-add="${esc(n)}">+${n}</button>`).join('')}</div>
     <div class="field"><span>Link del ${t.unitLong} donde quedaste (opcional)</span>
       <div class="field-row"><input id="ci-url" type="url" inputmode="url" placeholder="https://…" value="${esc(p.url || '')}"><button class="btn sm" id="ci-paste">Pegar</button></div>
       <small class="muted ci-hint">Así <b>Último visto</b> abrirá justo ese ${t.unitLong}. Si el link trae el número, el contador se ajusta solo.</small>
@@ -933,7 +958,7 @@ export function openLinkFirst(w, p = { mode: 'manual' }) {
         <div class="ci-val"><input id="ci-n" type="number" inputmode="decimal" min="0" step="any" value="${cur + 1}" aria-label="${t.unitLong}"><small>antes: ${t.unit} ${cur}</small></div>
         <button class="cbtn plus" data-ci="1" aria-label="Uno más">+</button>
       </div>
-      <div class="chips center ci-quick">${[1, 2, 5, 10].map((n) => `<button class="chip" data-add="${n}">+${n}</button>`).join('')}</div>
+      <div class="chips center ci-quick">${[1, 2, 5, 10].map((n) => `<button class="chip" data-add="${esc(n)}">+${n}</button>`).join('')}</div>
       <div class="row-btns"><button class="btn ghost" id="lf-back">← Cambiar link</button><button class="btn primary" id="lf-save">Guardar</button></div>
     </div>`, { cls: 'checkin' });
   const urlIn = $('#lf-url', s.el), msg = $('#lf-msg', s.el), next = $('#lf-next', s.el), num = $('#ci-n', s.el);
@@ -995,7 +1020,7 @@ export function openLinkFirst(w, p = { mode: 'manual' }) {
 
 // ---------- detalle ----------
 function starsHTML(rating) {
-  return `<div class="stars" role="radiogroup" aria-label="Calificación">${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= rating ? 'on' : ''}" data-star="${n}" role="radio" aria-checked="${n === rating}" aria-label="${n} estrellas">${ICONS.star}</button>`).join('')}</div>`;
+  return `<div class="stars" role="radiogroup" aria-label="Calificación">${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= rating ? 'on' : ''}" data-star="${esc(n)}" role="radio" aria-checked="${n === rating}" aria-label="${n} estrellas">${ICONS.star}</button>`).join('')}</div>`;
 }
 
 // "hoy, 21:34" · "ayer, 21:34" · "14 oct, 21:34"
@@ -1058,7 +1083,7 @@ function counterHTML(w) {
         <div class="cval">
           <small>${t.unitLong[0].toUpperCase() + t.unitLong.slice(1)}</small>
           <button class="num" id="num" aria-label="Actualizar con el link">${n}</button>
-          <small>${w.total ? `de ${w.total}` : 'según tu último link'}</small>
+          <small>${w.total ? `de ${esc(w.total)}` : 'según tu último link'}</small>
         </div>
         <button class="cbtn plus lf-btn" id="lf-open" aria-label="Registrar nuevo capítulo"><span>🔗</span><b>Nuevo ${t.unitLong}</b><small>pega su link</small></button>
       </div>
@@ -1072,7 +1097,7 @@ function counterHTML(w) {
       <div class="cval">
         <small>${t.unitLong[0].toUpperCase() + t.unitLong.slice(1)}</small>
         <button class="num" id="num" aria-label="Editar número">${n}</button>
-        <small>${w.total ? `de ${w.total}` : 'toca el número para editar'}</small>
+        <small>${w.total ? `de ${esc(w.total)}` : 'toca el número para editar'}</small>
       </div>
       <button class="cbtn plus" data-step="1" aria-label="Sumar uno"><span>+1</span></button>
     </div>
@@ -1094,7 +1119,7 @@ function milestone(w, anchor) {
 function seriesTotalText(w) {
   const tot = seriesTotals(w);
   if (tot) return `${tot.seen} de ${tot.total} episodios vistos · ${w.seasons.length} ${w.seasons.length === 1 ? 'temporada' : 'temporadas'}`;
-  return w.progress.watched ? `${w.progress.watched} episodios vistos en total` : '';
+  return w.progress.watched ? `${esc(w.progress.watched)} episodios vistos en total` : '';
 }
 
 // Actualiza el panel de la serie sin recargar la pantalla
@@ -1113,7 +1138,7 @@ function refreshSeries(w, root, dir) {
 function platformPanelHTML(w) {
   return `<section class="panel">
     <div class="sec-head"><h3>Dónde la veo</h3><span class="muted small">${w.platform ? 'toca otra vez para quitar' : 'elige la plataforma'}</span></div>
-    <div class="chips wrap" id="plat-chips">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${k}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div>
+    <div class="chips wrap" id="plat-chips">${STREAMING.map((k) => `<button class="chip ${w.platform === k ? 'on' : ''}" data-plat="${esc(k)}"><span class="sdot" style="--c:${PLATFORMS[k].color}"></span>${esc(PLATFORMS[k].name)}</button>`).join('')}</div>
   </section>`;
 }
 
@@ -1125,12 +1150,12 @@ function linksHTML(w) {
     ${links.length ? `<ul class="links">${links.map((l, i) => {
       const p = PLATFORMS[l.platform] || PLATFORMS.web;
       let shown = l.url; try { const u = new URL(l.url); shown = u.hostname.replace(/^www\./, '') + decodeURI(u.pathname); } catch { /* */ }
-      return `<li class="link-row" data-link="${l.id}">
+      return `<li class="link-row" data-link="${esc(l.id)}">
         <span class="pbadge" style="--c:${p.color}">${esc(p.name)}</span>
-        <span class="link-main"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" class="link-url">${esc(shown)}</a>
+        <span class="link-main"><a href="${esc(safeURL(l.url))}" target="_blank" rel="noopener noreferrer" class="link-url">${esc(shown)}</a>
         <small class="link-when">${i === 0 ? 'Actual' : 'Anterior'}${l.addedAt ? ` · guardado ${fmtWhen(l.addedAt)}` : ''}</small></span>
-        ${i === 0 ? '<span class="muted small" title="Link principal">★</span>' : `<button class="icon-btn xs" data-primary="${l.id}" aria-label="Hacer principal">☆</button>`}
-        <button class="icon-btn xs" data-dellink="${l.id}" aria-label="Quitar link">${ICONS.close}</button>
+        ${i === 0 ? '<span class="muted small" title="Link principal">★</span>' : `<button class="icon-btn xs" data-primary="${esc(l.id)}" aria-label="Hacer principal">☆</button>`}
+        <button class="icon-btn xs" data-dellink="${esc(l.id)}" aria-label="Quitar link">${ICONS.close}</button>
       </li>`;
     }).join('')}</ul>` : `<p class="muted small">Sin links. Agrega dónde ${TYPES[w.type].reading ? 'lo lees' : 'lo ves'} para usar el botón Continuar.</p>`}
   </section>`;
@@ -1145,7 +1170,7 @@ async function renderDetail(root, id) {
   root.innerHTML = `
   <div class="detail">
     <div class="hero">
-      <div class="hero-bg">${w.cover ? `<img src="${esc(w.cover)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
+      <div class="hero-bg">${w.cover ? `<img src="${esc(imageURL(w.cover))}" alt="" referrerpolicy="no-referrer">` : ''}</div>
       <header class="topbar clear">
         <button class="icon-btn" id="back" aria-label="Volver">${ICONS.back}</button>
         <div class="grow"></div>
@@ -1174,7 +1199,7 @@ async function renderDetail(root, id) {
     <section class="panel">
       <h3>Estado</h3>
       <div class="chips wrap" id="status-chips">
-        ${Object.entries(STATUSES).map(([k, s]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${k}" style="--c:${s.color}"><span class="sdot" style="--c:${s.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
+        ${Object.entries(STATUSES).map(([k, s]) => `<button class="chip ${w.status === k ? 'on' : ''}" data-status="${esc(k)}" style="--c:${s.color}"><span class="sdot" style="--c:${s.color}"></span>${statusLabel(k, w.type)}</button>`).join('')}
       </div>
       <p class="status-hint" id="st-hint">${esc(statusHint(w.status, w.type))}</p>
     </section>
@@ -1188,12 +1213,12 @@ async function renderDetail(root, id) {
 
     <section class="panel">
       <div class="sec-head"><h3>Notas</h3><span class="muted small" id="note-state"></span></div>
-      <textarea id="notes" rows="4" placeholder="Escribe lo que quieras recordar…">${esc(w.notes || '')}</textarea>
+      <textarea id="notes" aria-label="Notas de la obra" rows="4" placeholder="Escribe lo que quieras recordar…">${esc(w.notes || '')}</textarea>
     </section>
 
     <div class="meta-foot">
       <span>Agregada ${relTime(w.createdAt)} · actualizada ${relTime(w.updatedAt)}</span>
-      ${attr ? `<span>${esc(attr.text)} · <a href="${esc(w.source.url || attr.url)}" target="_blank" rel="noopener">ver en ${esc(attr.name)}</a></span>` : ''}
+      ${attr ? `<span>${esc(attr.text)} · <a href="${esc(safeURL(w.source.url || attr.url))}" target="_blank" rel="noopener noreferrer">ver en ${esc(attr.name)}</a></span>` : ''}
     </div>
     <button class="btn danger ghost block" id="delete">${ICONS.trash} Eliminar obra</button>
   </div>`;
@@ -1260,7 +1285,7 @@ async function renderDetail(root, id) {
     w.progress.episode = 0; await saveWork(w);
     refreshSeries(w, root, 1);
     drawSeasons(w, root);
-    toast(`Temporada ${w.progress.season}: listo para el episodio 1`, { icon: '📺' });
+    toast(`Temporada ${esc(w.progress.season)}: listo para el episodio 1`, { icon: '📺' });
   });
   $('#movie-seen', root)?.addEventListener('click', async (e) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -1404,28 +1429,28 @@ function drawSeasons(w, root) {
     <div class="sec-head"><h3>📺 Temporadas</h3><span class="muted small">${info.ended ? 'Finalizada' : 'En emisión'} · ${info.seasons.length} ${info.seasons.length === 1 ? 'temporada' : 'temporadas'} · ${total} episodios</span></div>
     <div class="season-chips scroll-x">${info.seasons.map((x) => {
       const done = x.n < cur || (x.n === cur && ep >= x.eps);
-      return `<button class="season-chip ${x.n === season.n ? 'on' : ''} ${done ? 'done' : ''} ${x.n === cur ? 'now' : ''}" data-pick-season="${x.n}"><b>T${x.n}</b><small>${x.eps} ep.${done ? ' ✓' : ''}</small></button>`;
+      return `<button class="season-chip ${x.n === season.n ? 'on' : ''} ${done ? 'done' : ''} ${x.n === cur ? 'now' : ''}" data-pick-season="${esc(x.n)}"><b>T${esc(x.n)}</b><small>${esc(x.eps)} ep.${done ? ' ✓' : ''}</small></button>`;
     }).join('')}</div>
     <div class="season-head">
-      <b>Temporada ${season.n}</b>
-      <span class="muted small">${season.eps} episodios${season.premiere ? ` · ${year(season.premiere)}${season.end && year(season.end) !== year(season.premiere) ? `–${year(season.end)}` : ''}` : ''}${season.aired < season.eps ? ` · ${season.aired} emitidos` : ''}</span>
+      <b>Temporada ${esc(season.n)}</b>
+      <span class="muted small">${esc(season.eps)} episodios${season.premiere ? ` · ${year(season.premiere)}${season.end && year(season.end) !== year(season.premiere) ? `–${year(season.end)}` : ''}` : ''}${season.aired < season.eps ? ` · ${esc(season.aired)} emitidos` : ''}</span>
     </div>
     <ul class="ep-list">${eps.map((e) => {
       const isSeen = seen(e.s, e.n), isNext = e.s === cur && e.n === ep + 1;
       const future = e.stamp && new Date(e.stamp).getTime() > now;
       return `<li class="ep-row ${isSeen ? 'seen' : ''} ${isNext ? 'next' : ''} ${future ? 'future' : ''}">
-        <div class="ep-img">${e.image ? `<img src="${esc(e.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()">` : ''}<span>E${e.n}</span></div>
+        <div class="ep-img">${e.image ? `<img src="${esc(imageURL(e.image))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-image-fade>` : ''}<span>E${esc(e.n)}</span></div>
         <div class="ep-text">
-          <b>${e.n}. ${esc(e.name || `Episodio ${e.n}`)}</b>
-          <small>${future ? `Sale el ${fmtD(e.date)}` : fmtD(e.date)}${e.runtime ? ` · ${e.runtime} min` : ''}${isNext ? ' · <em>el que sigue</em>' : ''}</small>
+          <b>${esc(e.n)}. ${esc(e.name || `Episodio ${esc(e.n)}`)}</b>
+          <small>${future ? `Sale el ${fmtD(e.date)}` : fmtD(e.date)}${e.runtime ? ` · ${esc(e.runtime)} min` : ''}${isNext ? ' · <em>el que sigue</em>' : ''}</small>
           ${e.summary ? (isSeen ? `<p class="ep-sum">${esc(e.summary)}</p>` : `<button class="ep-spoil" data-reveal>🙈 Sinopsis oculta para no darte spoilers · tocar para leerla</button><p class="ep-sum" hidden>${esc(e.summary)}</p>`) : ''}
         </div>
-        ${future ? '' : `<button class="ep-mark ${isSeen ? 'on' : ''}" data-mark="${e.s}:${e.n}" aria-label="${isSeen ? 'Visto' : 'Marcar visto hasta aquí'}">${isSeen ? '✓' : '○'}</button>`}
+        ${future ? '' : `<button class="ep-mark ${isSeen ? 'on' : ''}" data-mark="${esc(e.s)}:${esc(e.n)}" aria-label="${isSeen ? 'Visto' : 'Marcar visto hasta aquí'}">${isSeen ? '✓' : '○'}</button>`}
       </li>`;
     }).join('')}</ul>
     <details class="spoiler-notes">
-      <summary>🙈 Mis notas con spoilers · temporada ${season.n}</summary>
-      <textarea rows="3" data-snotes="${season.n}" placeholder="Lo que pasó en esta temporada (queda escondido hasta que abras este apartado)">${esc((w.seasonNotes || {})[season.n] || '')}</textarea>
+      <summary>🙈 Mis notas con spoilers · temporada ${esc(season.n)}</summary>
+      <textarea rows="3" data-snotes="${esc(season.n)}" placeholder="Lo que pasó en esta temporada (queda escondido hasta que abras este apartado)">${esc((w.seasonNotes || {})[season.n] || '')}</textarea>
     </details>
     <p class="muted xsmall">Toca ○ para marcar visto hasta ese episodio. Datos de TVmaze (CC BY-SA 4.0).</p>`;
   if (!panel.dataset.bound) {
@@ -1477,7 +1502,7 @@ async function loadCast(w, root) {
 function drawCast(root, cast = [], directors = []) {
   const panel = $('#cast-panel', root);
   if (!panel || (!cast.length && !directors.length)) return;
-  const person = (p) => `<li><span class="cast-img">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()">` : ''}<i>${esc(p.name.split(' ').map((x) => x[0]).slice(0, 2).join(''))}</i></span><b>${esc(p.name)}</b>${p.role ? `<small>${esc(p.role)}</small>` : ''}</li>`;
+  const person = (p) => `<li><span class="cast-img">${p.image ? `<img src="${esc(imageURL(p.image))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-image-fade>` : ''}<i>${esc(p.name.split(' ').map((x) => x[0]).slice(0, 2).join(''))}</i></span><b>${esc(p.name)}</b>${p.role ? `<small>${esc(p.role)}</small>` : ''}</li>`;
   panel.hidden = false;
   panel.innerHTML = `<div class="sec-head"><h3>🎭 Reparto</h3>${directors.length ? `<span class="muted small">Dirección: ${esc(directors.map((d) => d.name).join(', '))}</span>` : ''}</div>
     <ul class="cast-row">${cast.map(person).join('')}</ul>`;
@@ -1486,12 +1511,12 @@ function drawCast(root, cast = [], directors = []) {
 function goRowHTML(w, t) {
   const u = TYPES[w.type].unit;
   if (t.next) {
-    return `<button class="btn primary lg go-next" data-go="next">${ICONS.play}<span><small>Siguiente</small>${u} ${t.next}</span></button>
-      ${t.last ? `<button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${u} ${t.last.n}</span></button>` : ''}`;
+    return `<button class="btn primary lg go-next" data-go="next">${ICONS.play}<span><small>Siguiente</small>${u} ${esc(t.next)}</span></button>
+      ${t.last ? `<button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${u} ${esc(t.last.n)}</span></button>` : ''}`;
   }
   if (t.list) {
     return `<button class="btn primary lg go-next" data-go="list"><b>📚</b><span><small>Para el siguiente</small>Ver capítulos</span></button>
-      <button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${t.last?.n ? `${u} ${t.last.n}` : 'Abrir link'}</span></button>`;
+      <button class="btn lg go-last" data-go="last"><b>↺</b><span><small>Último visto</small>${t.last?.n ? `${u} ${esc(t.last.n)}` : 'Abrir link'}</span></button>`;
   }
   return `<button class="btn primary lg go-next" data-go="next">${ICONS.play}<span><small>Continuar</small>Abrir link</span></button>`;
 }

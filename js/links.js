@@ -32,7 +32,9 @@ export const normKey = (s = '') => s.toLowerCase().normalize('NFD').replace(/[̀
 const STOP = new Set(['leer', 'read', 'manga', 'manhwa', 'manhua', 'comic', 'comics', 'series', 'serie', 'chapter', 'chapters', 'capitulo', 'capitulos', 'cap', 'ver', 'watch', 'episode', 'episodio', 'title', 'titulo', 'obra', 'obras', 'library', 'biblioteca', 'webtoon', 'es', 'en', 'view', 'reader', 'lector', 'online', 'index', 'html', 'php']);
 
 export function slugToTitle(slug = '') {
-  let s = decodeURIComponent(slug).replace(/\.(html?|php)$/i, '');
+  let decoded = slug;
+  try { decoded = decodeURIComponent(slug); } catch { /* conserva el texto original */ }
+  let s = decoded.replace(/\.(html?|php)$/i, '');
   s = s.replace(/[-_](capitulo|chapter|cap|ch|episodio|ep)[-_]?\d+.*$/i, '');
   s = s.replace(/([-_](\d{4,}|[a-f0-9]{8,}))+$/i, ''); // ids largos al final
   s = s.replace(/[-_]+/g, ' ').trim();

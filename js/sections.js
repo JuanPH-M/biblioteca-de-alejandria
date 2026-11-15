@@ -1,3 +1,4 @@
+import { validateBackup } from './security.js';
 // Secciones: plataformas, fútbol, estadísticas, ajustes (respaldo) e importación de marcadores.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, readFile, download, relTime, coverHTML, vibrate, hueOf } from './ui.js';
 import { S, TYPES, STATUSES, TRACK_ONLY, platformsOf, statusLabel, progressLabel, saveWork, newWork, setPref, deletePattern, buildBackup, restoreBackup, linkFromParsed, BROWSERS, browserChoices, openUrl, IS_IOS, IS_ANDROID, IS_STANDALONE, reminderText, reminderActive } from './store.js';
@@ -81,7 +82,7 @@ export function readPlacesHTML() {
       const going = x.works.filter((w) => ['viendo', 'emision'].includes(w.status)).length;
       return `<div class="site-card" style="--c:${siteColor(x.name)};--i:${i}">
         <a href="#/plataforma/${SITE}${encodeURIComponent(x.name)}" class="site-main">
-          <span class="site-logo"><img src="${favicon(x.host)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"><i>${esc(x.name.slice(0, 2))}</i></span>
+          <span class="site-logo"><img src="${favicon(x.host)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-fade><i>${esc(x.name.slice(0, 2))}</i></span>
           <span class="site-text"><b>${esc(x.name)}</b><small>${x.works.length} ${x.works.length === 1 ? 'obra' : 'obras'}${going ? ` · ${going} en curso` : ''}</small></span>
         </a>
         <button class="btn sm site-open" data-open-site="https://${esc(x.host)}/">${ICONS.play} Abrir página</button>
@@ -111,7 +112,7 @@ export function bindPlaces(root) {
 }
 
 export function renderPlatform(root, key) {
-  key = decodeURIComponent(key || '');
+  key = key || ''; // El router ya decodificó el parámetro.
   const isNone = key === NONE_KEY;
   const isSite = key.startsWith(SITE);
   const siteN = isSite ? key.slice(SITE.length) : '';
@@ -125,22 +126,22 @@ export function renderPlatform(root, key) {
   root.innerHTML = `${backHeader(esc(p.name), `${list.length} ${list.length === 1 ? 'obra' : 'obras'}`, isSite ? '#/' : '#/ver')}
   <section class="plat-hero2" style="--c:${p.color}">
     <div class="ph-glow"></div>
-    <div class="ph-row"><span class="plat-glyph big ${site ? 'site-logo' : ''}">${site ? `<img src="${favicon(site.host)}" alt="" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"><i>${esc(siteN.slice(0, 2))}</i>` : isNone ? '🤔' : isSite ? ICONS.book : ICONS.play}</span><div><h2>${esc(p.name)}</h2><small>${site ? esc(site.host) : isNone ? PLAT_DESC[key] : descOf(key)}</small></div></div>
+    <div class="ph-row"><span class="plat-glyph big ${site ? 'site-logo' : ''}">${site ? `<img src="${favicon(site.host)}" alt="" referrerpolicy="no-referrer" data-image-fade><i>${esc(siteN.slice(0, 2))}</i>` : isNone ? '🤔' : isSite ? ICONS.book : ICONS.play}</span><div><h2>${esc(p.name)}</h2><small>${site ? esc(site.host) : isNone ? PLAT_DESC[key] : descOf(key)}</small></div></div>
     ${site ? `<button class="btn block site-open-big" data-open-site="https://${esc(site.host)}/">${ICONS.play} Abrir ${esc(siteN)}</button>` : ''}
     <div class="ph-stats">
-      <div><b data-count="${list.length}">${list.length}</b><small>obras</small></div>
-      <div><b data-count="${going.length}">${going.length}</b><small>en curso</small></div>
-      <div><b data-count="${done}">${done}</b><small>terminadas</small></div>
-      <div><b data-count="${progressSum}">${progressSum}</b><small>${(key === 'web' || isSite) ? 'capítulos' : 'cap./ep.'}</small></div>
+      <div><b data-count="${esc(list.length)}">${list.length}</b><small>obras</small></div>
+      <div><b data-count="${esc(going.length)}">${going.length}</b><small>en curso</small></div>
+      <div><b data-count="${esc(done)}">${done}</b><small>terminadas</small></div>
+      <div><b data-count="${esc(progressSum)}">${progressSum}</b><small>${(key === 'web' || isSite) ? 'capítulos' : 'cap./ep.'}</small></div>
     </div>
     ${statusBar(list)}
   </section>
   ${isNone && list.length ? '<p class="note" style="margin:0 16px 10px">Abre cada una y elige en "Dónde la veo" su plataforma, o mantén presionada la tarjeta.</p>' : ''}
   ${going.length > 1 ? `<section class="continue"><div class="sec-head"><h2>En curso aquí</h2></div><div class="carousel">${going.map((w, i) => `
-    <div class="c-item" data-id="${w.id}" style="--i:${i}"><a href="#/obra/${w.id}" class="c-cover">${coverHTML(w)}</a><div class="c-title">${esc(w.title)}</div><div class="c-row"><span class="muted small">${esc(progressLabel(w))}</span></div></div>`).join('')}</div></section>` : ''}
+    <div class="c-item" data-id="${esc(w.id)}" style="--i:${i}"><a href="#/obra/${esc(encodeURIComponent(w.id))}" class="c-cover">${coverHTML(w)}</a><div class="c-title">${esc(w.title)}</div><div class="c-row"><span class="muted small">${esc(progressLabel(w))}</span></div></div>`).join('')}</div></section>` : ''}
   ${list.length ? `<div class="chips scroll-x pf-chips" id="pf-chips">
       <button class="chip on" data-pf="all">Todas <em>${list.length}</em></button>
-      ${Object.entries(STATUSES).map(([k, st]) => { const n = list.filter((w) => w.status === k).length; return n ? `<button class="chip" data-pf="${k}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, list[0].type)} <em>${n}</em></button>` : ''; }).join('')}
+      ${Object.entries(STATUSES).map(([k, st]) => { const n = list.filter((w) => w.status === k).length; return n ? `<button class="chip" data-pf="${esc(k)}"><span class="sdot" style="--c:${st.color}"></span>${statusLabel(k, list[0].type)} <em>${n}</em></button>` : ''; }).join('')}
     </div>
     <div class="grid" id="pf-grid"></div>`
     : `<div class="empty small"><div class="empty-art"><span>${isNone ? '🎉' : '📭'}</span></div><h3>${isNone ? 'Todas tus series y películas tienen plataforma' : `Nada en ${esc(p.name)} todavía`}</h3><p class="muted">${isNone ? '' : (key === 'web' || isSite) ? 'Agrega el link de donde lees un manhwa o manga y aparecerá aquí.' : `Elige ${esc(p.name)} en "Dónde la veo" al agregar una serie o película.`}</p>${isNone ? '' : '<button class="btn primary" id="pf-add">＋ Agregar</button>'}</div>`}`;
@@ -217,7 +218,7 @@ export function renderStats(root) {
   root.innerHTML = `${backHeader('📊 Estadísticas', `${W.length} obras en tu biblioteca`, '#/ajustes')}
   <div class="kpis">
     ${[['📖', chapters, 'capítulos leídos'], ['📺', episodes, 'episodios vistos'], ['🎬', movies, 'películas vistas'], ['❤️', favs.length, 'favoritas'], ['🏁', W.filter((w) => w.status === 'terminado').length, 'terminadas'], ['▶️', W.filter((w) => ['viendo', 'emision'].includes(w.status)).length, 'en curso']].map(([ic, n, l], i) => `
-      <div class="kpi" style="--i:${i}"><span class="kpi-ic">${ic}</span><b data-count="${n}">0</b><small>${l}</small></div>`).join('')}
+      <div class="kpi" style="--i:${i}"><span class="kpi-ic">${ic}</span><b data-count="${esc(n)}">0</b><small>${l}</small></div>`).join('')}
   </div>
 
   <section class="panel">
@@ -241,9 +242,9 @@ export function renderStats(root) {
 
   ${topGenres.length ? `<section class="panel"><h3>Géneros favoritos</h3><div class="genre-cloud">${topGenres.map(([g, n], i) => `<span style="--i:${i};--s:${1 + (n / topGenres[0][1]) * 0.4}">${esc(g)} <em>${n}</em></span>`).join('')}</div></section>` : ''}
 
-  ${topRated.length ? `<section class="panel"><h3>Mejor calificadas</h3><ul class="mini-list">${topRated.map((w) => `<li><a href="#/obra/${w.id}">${coverHTML(w, 'xs')}<span class="grow">${esc(w.title)}<small class="muted">${TYPES[w.type].label}</small></span><span class="gold">${'★'.repeat(w.rating)}</span></a></li>`).join('')}</ul></section>` : ''}
+  ${topRated.length ? `<section class="panel"><h3>Mejor calificadas</h3><ul class="mini-list">${topRated.map((w) => `<li><a href="#/obra/${esc(encodeURIComponent(w.id))}">${coverHTML(w, 'xs')}<span class="grow">${esc(w.title)}<small class="muted">${TYPES[w.type].label}</small></span><span class="gold">${'★'.repeat(w.rating)}</span></a></li>`).join('')}</ul></section>` : ''}
 
-  ${favs.length ? `<section class="panel"><h3>Favoritas</h3><div class="fav-strip">${favs.slice(0, 12).map((w) => `<a href="#/obra/${w.id}" title="${esc(w.title)}">${coverHTML(w, 'sm')}</a>`).join('')}</div></section>` : ''}`;
+  ${favs.length ? `<section class="panel"><h3>Favoritas</h3><div class="fav-strip">${favs.slice(0, 12).map((w) => `<a href="#/obra/${esc(encodeURIComponent(w.id))}" title="${esc(w.title)}">${coverHTML(w, 'sm')}</a>`).join('')}</div></section>` : ''}`;
 
   // contadores animados
   $$('[data-count]', root).forEach((el) => {
@@ -302,7 +303,7 @@ export function renderSettings(root) {
   <h2 class="set-title">🏠 Inicio</h2>
   <section class="panel set-panel">
     <div class="set-row col"><span><b>Al abrir la app empezar en</b><small>La pestaña que ves primero</small></span>
-      <div class="seg" id="start-tab">${[['leer', '📖 Lectura'], ['ver', '📺 Ver'], ['deportes', '⚽ Deportes']].map(([k, l]) => `<button class="${(st.startTab || 'leer') === k ? 'on' : ''}" data-start="${k}">${l}</button>`).join('')}</div></div>
+      <div class="seg" id="start-tab">${[['leer', '📖 Lectura'], ['ver', '📺 Ver'], ['deportes', '⚽ Deportes']].map(([k, l]) => `<button class="${(st.startTab || 'leer') === k ? 'on' : ''}" data-start="${esc(k)}">${l}</button>`).join('')}</div></div>
     ${toggle('show-recs', '✨ Mostrar "Te puede gustar"', 'Recomendaciones en Lectura y en Ver', st.showRecs !== false)}
     ${toggle('show-clock', '🕒 Mostrar fecha y hora', 'Debajo del nombre, en pequeño', st.showClock !== false)}
   </section>
@@ -313,7 +314,7 @@ export function renderSettings(root) {
     ${toggle('rem-open', '📣 Avisarme al abrir la app', 'Un mensaje si hoy sale algo de lo que sigues', st.remindOnOpen !== false)}
     <div class="set-sep"></div>
     ${(() => { const list = S.works.filter((w) => w.reminder?.on && w.reminder.days?.length); return list.length
-      ? `<ul class="rem-list">${list.map((w) => `<li data-goto="${w.id}"><span class="grow"><b>${esc(w.title)}</b><small>${esc(reminderText(w))}${reminderActive(w) ? '' : ' · sin avisos por ahora'}</small></span><span class="chev">›</span></li>`).join('')}</ul>`
+      ? `<ul class="rem-list">${list.map((w) => `<li data-goto="${esc(w.id)}"><span class="grow"><b>${esc(w.title)}</b><small>${esc(reminderText(w))}${reminderActive(w) ? '' : ' · sin avisos por ahora'}</small></span><span class="chev">›</span></li>`).join('')}</ul>`
       : '<p class="muted small">Todavía no tienes recordatorios. Ábrelos dentro de cada obra, en <b>🔔 Avisarme cuando salga…</b>, y elige qué días sale. Si la pones en pausa, no te llegan avisos.</p>'; })()}
     <button class="btn block" id="open-notifs">🔔 Ver avisos</button>
   </section>
@@ -321,15 +322,15 @@ export function renderSettings(root) {
   <h2 class="set-title">📚 Biblioteca</h2>
   <section class="panel set-panel">
     <div class="set-row col"><span><b>Mostrar las obras como</b><small>En Lectura y en Ver</small></span>
-      <div class="seg two" id="def-view">${[['grid', '▦ Cuadrícula'], ['list', '☰ Lista']].map(([k, l]) => `<button class="${(st.view || 'grid') === k ? 'on' : ''}" data-v="${k}">${l}</button>`).join('')}</div></div>
+      <div class="seg two" id="def-view">${[['grid', '▦ Cuadrícula'], ['list', '☰ Lista']].map(([k, l]) => `<button class="${(st.view || 'grid') === k ? 'on' : ''}" data-v="${esc(k)}">${l}</button>`).join('')}</div></div>
     <div class="set-row col"><span><b>Ordenar por</b></span>
-      <div class="seg four" id="def-sort">${[['updated', 'Recientes'], ['title', 'A–Z'], ['rating', 'Estrellas'], ['added', 'Agregadas']].map(([k, l]) => `<button class="${(st.sort || 'updated') === k ? 'on' : ''}" data-s="${k}">${l}</button>`).join('')}</div></div>
+      <div class="seg four" id="def-sort">${[['updated', 'Recientes'], ['title', 'A–Z'], ['rating', 'Estrellas'], ['added', 'Agregadas']].map(([k, l]) => `<button class="${(st.sort || 'updated') === k ? 'on' : ''}" data-s="${esc(k)}">${l}</button>`).join('')}</div></div>
   </section>
 
   <h2 class="set-title">🎨 Apariencia</h2>
   <section class="panel set-panel">
     <p class="muted small">Color de la app. Con <b>Blanco</b> el fondo es negro y las letras y botones blancos.</p>
-    <div class="palette">${accents.map(([k, name, c, c2], i) => `<button class="pal ${st.accent === k ? 'on' : ''}" data-accent="${k}" style="--c:${c};--c2:${c2};--i:${i}" aria-label="Color ${name}"><i></i><span>${name}</span></button>`).join('')}</div>
+    <div class="palette">${accents.map(([k, name, c, c2], i) => `<button class="pal ${st.accent === k ? 'on' : ''}" data-accent="${esc(k)}" style="--c:${c};--c2:${c2};--i:${i}" aria-label="Color ${name}"><i></i><span>${name}</span></button>`).join('')}</div>
     ${toggle('amoled', '🌑 Negro puro (AMOLED)', 'Ahorra batería en pantallas OLED', st.amoled)}
     ${toggle('motion', '🐢 Reducir animaciones', 'Menos movimiento en la pantalla', st.motion === 'off')}
     ${toggle('haptics', '📳 Vibración al tocar', 'Pequeña vibración en botones (Android)', st.haptics !== false)}
@@ -338,7 +339,7 @@ export function renderSettings(root) {
   <h2 class="set-title">🔗 Abrir los links con</h2>
   <section class="panel set-panel" id="browser-panel">
     <p class="muted small">Dónde se abren tus capítulos: dentro de la app o en el navegador que prefieras.</p>
-    <div class="br-list" role="radiogroup">${browserChoices().map((k, i) => { const b = BROWSERS[k]; const on = (st.browser || 'system') === k; return `<button class="br-opt ${on ? 'on' : ''}" role="radio" aria-checked="${on}" data-browser="${k}" style="--i:${i}">
+    <div class="br-list" role="radiogroup">${browserChoices().map((k, i) => { const b = BROWSERS[k]; const on = (st.browser || 'system') === k; return `<button class="br-opt ${on ? 'on' : ''}" role="radio" aria-checked="${on}" data-browser="${esc(k)}" style="--i:${i}">
       <span class="br-emoji">${b.emoji}</span><span class="grow"><b>${esc(b.name)}</b>${b.desc ? `<small>${esc(b.desc)}</small>` : ''}</span><i class="br-radio"></i></button>`; }).join('')}</div>
     ${IS_IOS ? `<p class="note">${IS_STANDALONE ? 'Con la app instalada, <b>Navegador predeterminado</b> abre el link en una ventana encima de la app. Para salir de la app elige <b>Safari</b> u otro navegador. ' : ''}Las apps no pueden ver qué navegadores tienes: si eliges uno que no está instalado, el iPhone avisará que no puede abrir el link. Con <b>Preguntar cada vez</b> eliges en el momento.</p>`
       : IS_ANDROID ? `<p class="note">${IS_STANDALONE ? 'Con la app instalada, <b>Navegador predeterminado</b> abre el link en una ventana encima de la app. Para salir de la app elige un navegador de la lista. ' : ''}Las apps no pueden ver qué navegadores tienes: si eliges uno que no está instalado, el link se abre en el normal. Con <b>Preguntar cada vez</b> eliges en el momento.</p>`
@@ -354,7 +355,7 @@ export function renderSettings(root) {
     <div class="set-sep"></div>
     <p class="small"><b>Páginas que le enseñaste</b></p>
     <p class="muted small">Cuando pegas el link de una página que la app no conoce, te pregunta cuál de los números del link es el capítulo. La app lo recuerda para esa página y no te lo vuelve a preguntar. Si alguna se equivoca, bórrala aquí y vuelve a pegar un link de esa página.</p>
-    ${patterns.length ? `<ul class="pattern-list">${patterns.map((p) => `<li><span class="site-logo sm"><img src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(p.host)}.ico" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"><i>${esc(p.host.slice(0, 2))}</i></span><div class="grow"><b>${esc(p.host)}</b><small class="muted">${p.none ? 'El link no trae el número del capítulo' : p.confirmed ? 'Número del capítulo confirmado' : `El capítulo es el ${p.fromEnd + 1}.º número desde el final del link`}</small></div><button class="icon-btn xs" data-delpat="${esc(p.host)}" aria-label="Olvidar esta página">${ICONS.close}</button></li>`).join('')}</ul>`
+    ${patterns.length ? `<ul class="pattern-list">${patterns.map((p) => `<li><span class="site-logo sm"><img src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(p.host)}.ico" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-fade><i>${esc(p.host.slice(0, 2))}</i></span><div class="grow"><b>${esc(p.host)}</b><small class="muted">${p.none ? 'El link no trae el número del capítulo' : p.confirmed ? 'Número del capítulo confirmado' : `El capítulo es el ${p.fromEnd + 1}.º número desde el final del link`}</small></div><button class="icon-btn xs" data-delpat="${esc(p.host)}" aria-label="Olvidar esta página">${ICONS.close}</button></li>`).join('')}</ul>`
       : '<p class="muted small">Todavía no le has enseñado ninguna.</p>'}
     <a class="btn block" href="#/importar">${ICONS.upload} Importar marcadores de Chrome</a>
   </section>
@@ -374,11 +375,11 @@ export function renderSettings(root) {
     <h3>Acerca de</h3>
     <p class="small">Biblioteca de Alejandría guarda <b>solo tus links y tu progreso</b>. No aloja, descarga ni muestra capítulos, episodios ni videos: los links se abren en tu navegador.</p>
     <ul class="small attr-list">
-      <li>Datos de manhwa, manga y anime: <a href="https://anilist.co" target="_blank" rel="noopener">AniList</a></li>
-      <li>Datos de series: <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA 4.0)</li>
-      <li>Datos de películas y series: <a href="https://es.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0)</li>
-      <li>Fútbol, NBA, MLB y UFC: datos públicos de <a href="https://www.espn.com" target="_blank" rel="noopener">ESPN</a></li>
-      <li>Fórmula 1: <a href="https://github.com/jolpica/jolpica-f1" target="_blank" rel="noopener">Jolpica F1</a> (Ergast)</li>
+      <li>Datos de manhwa, manga y anime: <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a></li>
+      <li>Datos de series: <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a> (CC BY-SA 4.0)</li>
+      <li>Datos de películas y series: <a href="https://es.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a> (CC BY-SA 4.0)</li>
+      <li>Fútbol, NBA, MLB y UFC: datos públicos de <a href="https://www.espn.com" target="_blank" rel="noopener noreferrer">ESPN</a></li>
+      <li>Fórmula 1: <a href="https://github.com/jolpica/jolpica-f1" target="_blank" rel="noopener noreferrer">Jolpica F1</a> (Ergast)</li>
       <li>Íconos de las páginas de lectura: DuckDuckGo</li>
     </ul>
     <p class="small muted">Código abierto con licencia MIT.</p>
@@ -403,7 +404,7 @@ export function renderSettings(root) {
     if (!f) return;
     let data;
     try { data = JSON.parse(await readFile(f)); } catch { toast('El archivo no es un JSON válido.'); return; }
-    if (data?.app !== 'biblioteca-de-alejandria') { toast('Ese archivo no es un respaldo de esta app.'); return; }
+    try { validateBackup(data); } catch (err) { toast(err.message); return; }
     const s = openSheet(`<h3 class="sheet-title">Importar respaldo</h3>
       <p class="muted">${data.works.length} obras, ${(data.teams || []).length} equipos y ${(data.patterns || []).length} patrones · exportado ${esc(new Date(data.exportedAt).toLocaleString('es'))}</p>
       <div class="col-btns">
@@ -598,8 +599,8 @@ export function renderImport(root) {
       <div class="row-btns sm"><button class="btn sm ghost" id="bm-all">Marcar todas</button><button class="btn sm ghost" id="bm-none">Desmarcar todas</button></div>
       <ul class="bm-list">${items.map((it, i) => {
         const ex = existingKey.get(normKey(it.title));
-        return `<li class="bm ${it.selected ? '' : 'off'}" data-i="${i}" style="--i:${Math.min(i, 20)}">
-          <label class="check"><input type="checkbox" data-sel ${it.selected ? 'checked' : ''}><i></i></label>
+        return `<li class="bm ${it.selected ? '' : 'off'}" data-i="${esc(i)}" style="--i:${Math.min(i, 20)}">
+          <label class="check"><input type="checkbox" aria-label="Seleccionar ${esc(it.title)}" data-sel ${it.selected ? 'checked' : ''}><i></i></label>
           <div class="bm-main">
             <input class="bm-title" data-f="title" value="${esc(it.title)}" aria-label="Nombre">
             <div class="bm-meta">

@@ -1,3 +1,4 @@
+import { safeURL, imageURL, safeColor } from './security.js';
 // Fútbol (dentro de Deportes) con datos públicos de ESPN: clubes y selecciones, ligas con calendario y tabla completos,
 // y cada partido con goles, tarjetas, cambios, alineaciones y estadísticas.
 import { $, $$, esc, toast, ICONS, openSheet, confirmDialog, debounce, hueOf, vibrate, imageToDataURL } from './ui.js';
@@ -24,7 +25,7 @@ function leagueStyle(lg) {
 }
 function leagueBadge(lg, size = '') {
   const st = leagueStyle(lg);
-  if (lg.logo) return `<span class="lg-badge logo ${size}"><img src="${esc(lg.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  if (lg.logo) return `<span class="lg-badge logo ${size}"><img src="${esc(imageURL(lg.logo))}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
   return `<span class="lg-badge ${size}" style="--c1:${st.c1};--c2:${st.c2}">${st.flag}</span>`;
 }
 // "3rd in Colombian Primera A" → "3.º en Liga BetPlay"
@@ -84,7 +85,7 @@ export function renderFootball(root, param) {
     <i class="tabs2-pill" style="--x:${TABS.indexOf(tab)}"></i>
   </div>
   <div id="fb-body"></div>
-  <p class="attr">${esc(ATTRIBUTION.espn.text)} · <a href="${ATTRIBUTION.espn.url}" target="_blank" rel="noopener">ESPN</a></p></div>`;
+  <p class="attr">${esc(ATTRIBUTION.espn.text)} · <a href="${ATTRIBUTION.espn.url}" target="_blank" rel="noopener noreferrer">ESPN</a></p></div>`;
   $('.tabs2', root).addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]');
     if (!b || b.dataset.tab === tab) return;
@@ -115,7 +116,7 @@ function drawTeams(body) {
     <div id="fb-next-hero"></div>
     <button class="add-big" id="add-team"><span>＋</span><b>Agregar equipo o selección</b></button>
     <div class="fb-grid" id="team-grid">${S.teams.map((t, i) => `
-      <button class="fb-tile team-tile" data-team="${esc(t.id)}" style="--i:${i};--tc1:${t.color1 || '#16a34a'};--tc2:${t.color2 || '#0f172a'}">
+      <button class="fb-tile team-tile" data-team="${esc(t.id)}" style="--i:${i};--tc1:${safeColor(t.color1, '#16a34a')};--tc2:${safeColor(t.color2, '#0f172a')}">
         ${avatar(t, 'md')}
         <b>${esc(t.name)}</b>
         <small>${esc(leagueName(t.league) || t.country || '')}</small>
@@ -176,7 +177,7 @@ function openTeamSearch() {
   const s = openSheet(`
     <h3 class="sheet-title">Agregar equipo</h3>
     <div class="searchbar in-sheet"><span class="ic">${ICONS.search}</span>
-      <input id="ts-q" type="search" placeholder="Club o selección (p. ej. Nacional, Colombia)" autocomplete="off" enterkeyhint="search"></div>
+      <input id="ts-q" aria-label="Buscar equipo" type="search" placeholder="Club o selección (p. ej. Nacional, Colombia)" autocomplete="off" enterkeyhint="search"></div>
     <div id="ts-res"><p class="muted small center pad">Escribe al menos 3 letras.</p></div>`, { cls: 'tall' });
   const q = $('#ts-q', s.el), res = $('#ts-res', s.el);
   let token = 0, found = [];
@@ -205,7 +206,7 @@ function openTeamSearch() {
 function openTeam(t) {
   if (!t) return;
   const s = openSheet(`
-    <div class="fb-hero" style="--c1:${t.color1 || '#16a34a'};--c2:${t.color2 || '#111'}">
+    <div class="fb-hero" style="--c1:${safeColor(t.color1, '#16a34a')};--c2:${safeColor(t.color2, '#111')}">
       <div class="fb-hero-av">${avatar(t, 'xl')}</div>
       <h3>${esc(t.name)}</h3>
       <p class="muted small" id="tm-sub">${esc(standingEs(t.standing, t.league) || leagueName(t.league) || t.country || '')}</p>
@@ -354,7 +355,7 @@ function openLeagueSearch(intl = false) {
   const s = openSheet(`
     <h3 class="sheet-title">${intl ? 'Agregar torneo internacional' : 'Agregar liga o copa'}</h3>
     <div class="searchbar in-sheet"><span class="ic">${ICONS.search}</span>
-      <input id="ls-q" type="search" placeholder="${intl ? 'Nombre (p. ej. Concacaf, Mundial de Clubes)' : 'Nombre o país (p. ej. Liga MX, Chile, Eredivisie)'}" autocomplete="off" enterkeyhint="search"></div>
+      <input id="ls-q" aria-label="Buscar liga o torneo" type="search" placeholder="${intl ? 'Nombre (p. ej. Concacaf, Mundial de Clubes)' : 'Nombre o país (p. ej. Liga MX, Chile, Eredivisie)'}" autocomplete="off" enterkeyhint="search"></div>
     <div id="ls-res"></div>
     ${groups.map(([title, pops]) => `
     <h4 class="ls-title">${title}</h4>
@@ -437,12 +438,12 @@ function openLeague(lg) {
         body.innerHTML = `<div class="mh-view">${r.data.length ? `${r.data.map((g) => `
           ${r.data.length > 1 || g.name ? `<h4 class="st-name">${esc(g.name || '')}</h4>` : ''}
           <table class="lg-table fb-table"><thead><tr><th>#</th><th class="tl">Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>DG</th><th>Pts</th></tr></thead><tbody>
-          ${g.rows.map((x, i) => `<tr style="--i:${Math.min(i, 20)};${x.note?.color ? `--nc:${esc(x.note.color)}` : ''}" class="${x.note?.color ? 'noted' : ''} ${S.teams.some((t) => t.id === x.id) ? 'is-fav' : ''}" data-team="${esc(x.id)}">
-            <td><span class="rank r${x.rank || i + 1}">${x.rank || i + 1}</span></td>
+          ${g.rows.map((x, i) => `<tr style="--i:${Math.min(i, 20)};${x.note?.color ? `--nc:${safeColor(x.note.color)}` : ''}" class="${x.note?.color ? 'noted' : ''} ${S.teams.some((t) => t.id === x.id) ? 'is-fav' : ''}" data-team="${esc(x.id)}">
+            <td><span class="rank r${esc(x.rank || i + 1)}">${esc(x.rank || i + 1)}</span></td>
             <td class="tl"><div class="tcell">${avatar(x, 'xs')}<span>${esc(x.name)}</span></div></td>
             <td>${esc(x.pj)}</td><td>${esc(x.w)}</td><td>${esc(x.d)}</td><td>${esc(x.l)}</td><td>${esc(x.gd)}</td><td><b>${esc(x.pts)}</b></td></tr>`).join('')}
           </tbody></table>`).join('')}
-          ${notes.length ? `<ul class="st-legend">${notes.map((n) => `<li><i style="--nc:${esc(n.color)}"></i>${esc(n.text)}</li>`).join('')}</ul>` : ''}
+          ${notes.length ? `<ul class="st-legend">${notes.map((n) => `<li><i style="--nc:${safeColor(n.color)}"></i>${esc(n.text)}</li>`).join('')}</ul>` : ''}
           <p class="muted small center">Toca un equipo para seguirlo.</p>${updated(r)}`
           : '<p class="muted small center pad">Este torneo no tiene tabla de posiciones disponible.</p>'}</div>`;
       } catch { if (s.open) body.innerHTML = errorBox('Este torneo no tiene tabla de posiciones disponible.'); }
@@ -523,9 +524,9 @@ function editCrest(name, current, onSave) {
     <h3 class="sheet-title">Escudo de ${esc(name)}</h3>
     <p class="muted small">Pega el link de una imagen o elige una de tu galería. Se guarda solo en tu teléfono.</p>
     <div class="crest-edit">
-      <div class="crest-prev" id="cr-prev">${current ? `<img src="${esc(current)}" alt="">` : '<span>🛡️</span>'}</div>
+      <div class="crest-prev" id="cr-prev">${current ? `<img src="${esc(imageURL(current))}" alt="">` : '<span>🛡️</span>'}</div>
       <div class="grow col-btns">
-        <input id="cr-url" type="url" placeholder="https://…" value="${current && !current.startsWith('data:') ? esc(current) : ''}">
+        <input id="cr-url" aria-label="Link del escudo" type="url" placeholder="https://…" value="${current && !current.startsWith('data:') ? esc(current) : ''}">
         <div class="row-btns sm">
           <label class="btn sm">${ICONS.upload} Galería<input type="file" accept="image/*" id="cr-file" hidden></label>
           <button class="btn sm ghost" id="cr-del">Quitar</button>
@@ -534,8 +535,8 @@ function editCrest(name, current, onSave) {
     </div>
     <div class="row-btns"><button class="btn ghost" id="cr-cancel">Cancelar</button><button class="btn primary" id="cr-save">Guardar escudo</button></div>`);
   let logo = current || '';
-  const prev = () => { $('#cr-prev', s.el).innerHTML = logo ? `<img src="${esc(logo)}" alt="" onerror="this.replaceWith(document.createTextNode('⚠️'))">` : '<span>🛡️</span>'; };
-  $('#cr-url', s.el).addEventListener('input', debounce((e) => { logo = e.target.value.trim(); prev(); }, 300));
+  const prev = () => { $('#cr-prev', s.el).innerHTML = logo ? `<img src="${esc(imageURL(logo))}" alt="" data-image-warning>` : '<span>🛡️</span>'; };
+  $('#cr-url', s.el).addEventListener('input', debounce((e) => { logo = safeURL(e.target.value.trim()); prev(); }, 300));
   $('#cr-file', s.el).addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -563,7 +564,7 @@ function timelineHTML(d) {
         : e.kind === 'og' ? `<b>${esc(e.a)}</b><small>Autogol</small>`
           : e.kind === 'penmiss' ? `<b>${esc(e.a)}</b><small>Penal fallado</small>`
             : `<b>${esc(e.a)}</b>`;
-    return `<li class="tl-ev ${e.side} k-${e.kind}" style="--i:${Math.min(i, 30)}"><span class="tl-min">${esc(e.min)}</span><span class="tl-ic">${EV_ICON[e.kind]}</span><span class="tl-what">${what}</span></li>`;
+    return `<li class="tl-ev ${esc(e.side)} k-${esc(e.kind)}" style="--i:${Math.min(i, 30)}"><span class="tl-min">${esc(e.min)}</span><span class="tl-ic">${EV_ICON[e.kind]}</span><span class="tl-what">${what}</span></li>`;
   }).join('')}</ul>`;
 }
 function lineupsHTML(d, g) {

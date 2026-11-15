@@ -1,3 +1,4 @@
+import { imageURL } from './security.js';
 // Utilidades de interfaz: escape, toasts, hojas modales, animaciones.
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -5,6 +6,18 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.motion === 'off';
+
+// load/error no burbujean: captura también imágenes añadidas por vistas y modales.
+document.addEventListener('load', (e) => {
+  if (e.target instanceof HTMLImageElement && e.target.hasAttribute('data-image-fade')) e.target.classList.add('ok');
+}, true);
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  img.parentElement?.classList.remove('logo');
+  if (img.hasAttribute('data-image-warning')) img.replaceWith(document.createTextNode('⚠️'));
+  else img.remove();
+}, true);
 
 export function debounce(fn, ms) {
   let t;
@@ -31,7 +44,7 @@ export function coverHTML(work, cls = '') {
   const h = hueOf(work.title);
   const ph = `<div class="cover-ph" style="--h:${h}"><span>${esc(initials(work.title))}</span></div>`;
   if (!work.cover) return `<div class="cover ${cls}">${ph}</div>`;
-  return `<div class="cover ${cls}">${ph}<img src="${esc(work.cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok')" onerror="this.remove()"></div>`;
+  return `<div class="cover ${cls}">${ph}<img src="${esc(imageURL(work.cover))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-image-fade></div>`;
 }
 
 // ---------- toasts ----------
@@ -52,6 +65,7 @@ export function toast(msg, { action, onAction, timeout = 3500, icon = '' } = {})
 let sheetStack = [];
 let ignorePops = 0;
 export function openSheet(html, { onClose, cls = '' } = {}) {
+  const previousFocus = document.activeElement;
   const wrap = document.createElement('div');
   wrap.className = 'sheet-wrap';
   wrap.innerHTML = `<div class="sheet-backdrop"></div><div class="sheet ${cls}" role="dialog" aria-modal="true"><div class="sheet-grip" aria-hidden="true"></div><div class="sheet-body">${html}</div></div>`;
@@ -67,8 +81,15 @@ export function openSheet(html, { onClose, cls = '' } = {}) {
       if (closed) return;
       closed = true;
       wrap.classList.remove('open');
+      wrap.inert = true;
+      wrap.removeEventListener('keydown', onKey);
       sheetStack = sheetStack.filter((s) => s !== api);
       if (!sheetStack.length) document.body.classList.remove('no-scroll');
+      if (!sheetStack.length) {
+        document.getElementById('view').inert = false;
+        document.querySelector('.tabbar').inert = false;
+      }
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
       setTimeout(() => wrap.remove(), 320);
       onClose?.();
       if (!fromPop && pushed) { ignorePops++; history.back(); }
@@ -77,6 +98,23 @@ export function openSheet(html, { onClose, cls = '' } = {}) {
   wrap.querySelector('.sheet-backdrop').addEventListener('click', () => api.close());
   // arrastrar la barrita hacia abajo para cerrar
   const sheet = wrap.querySelector('.sheet');
+  sheet.tabIndex = -1;
+  const heading = sheet.querySelector('h3, h2, h1');
+  if (heading) {
+    heading.id ||= `sheet-title-${Date.now()}-${sheetStack.length}`;
+    sheet.setAttribute('aria-labelledby', heading.id);
+  }
+  const onKey = (e) => {
+    if (sheetStack.at(-1) !== api) return;
+    if (e.key === 'Escape') { e.preventDefault(); api.close(); return; }
+    if (e.key !== 'Tab') return;
+    const targets = $$('a[href], button, input, select, textarea, [tabindex="0"]', sheet).filter((x) => !x.disabled && x.getClientRects().length);
+    const first = targets[0], last = targets.at(-1);
+    if (!first) { e.preventDefault(); sheet.focus(); }
+    else if (e.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (document.activeElement === last || document.activeElement === sheet)) { e.preventDefault(); first.focus(); }
+  };
+  wrap.addEventListener('keydown', onKey);
   const grip = wrap.querySelector('.sheet-grip');
   let y0 = null, dy = 0;
   grip.addEventListener('pointerdown', (e) => { y0 = e.clientY; sheet.style.transition = 'none'; grip.setPointerCapture(e.pointerId); });
@@ -85,6 +123,9 @@ export function openSheet(html, { onClose, cls = '' } = {}) {
   grip.addEventListener('pointerup', end);
   grip.addEventListener('pointercancel', end);
   sheetStack.push(api);
+  document.getElementById('view').inert = true;
+  document.querySelector('.tabbar').inert = true;
+  sheet.focus({ preventScroll: true });
   whenSettled(() => { if (!closed) { history.pushState({ sheet: true }, ''); pushed = true; } });
   return api;
 }
