@@ -5,7 +5,7 @@ const SHELL = `shell-${VERSION}`;
 const IMAGES = 'covers-v1';
 const ASSETS = [
   './', 'index.html', 'manifest.json', 'css/styles.css',
-  'js/security.js', 'js/app.js', 'js/db.js', 'js/ui.js', 'js/store.js', 'js/links.js', 'js/api.js', 'js/editor.js', 'js/sections.js', 'js/football.js', 'js/sports.js', 'js/discover.js',
+  'js/carousels.js', 'js/security.js', 'js/app.js', 'js/db.js', 'js/ui.js', 'js/store.js', 'js/links.js', 'js/api.js', 'js/editor.js', 'js/sections.js', 'js/football.js', 'js/sports.js', 'js/discover.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png',
 ];
 

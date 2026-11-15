@@ -1,3 +1,4 @@
+import { enhanceCarousels } from './carousels.js';
 import { safeURL, imageURL } from './security.js';
 // Biblioteca de Alejandría — arranque, rutas, biblioteca y detalle de obra.
 import { $, $$, esc, toast, coverHTML, rollNumber, floatText, confetti, tilt, vibrate, debounce, ICONS, relTime, reducedMotion, closeAllSheets, confirmDialog, whenSettled, openSheet, onLongPress, sheetsOpen } from './ui.js';
@@ -70,6 +71,7 @@ export async function render({ keepScroll = false } = {}) {
     view.classList.remove('view-enter');
     await fn(view);
     hydrateIcons(view);
+    enhanceCarousels(view);
     if (changed) window.scrollTo(0, 0);
     else if (keepScroll) window.scrollTo(0, scrollY);
   };
@@ -247,7 +249,7 @@ async function renderHome(root, mode = 'leer') {
     </div>
     <div class="suggest" id="suggest" role="listbox" hidden></div>
   </div>
-  ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="tablist" aria-label="Obras destacadas">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${esc(i)}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}</div>` : ''}</div>` : ''}
+  ${spot && !f.q ? `<div class="spot-deck" id="spot-deck">${spotlightHTML(spot)}${spotPool.length > 1 ? `<div class="spot-dots" role="group" aria-label="Obras destacadas">${spotPool.map((w, i) => `<button class="${i ? '' : 'on'}" data-spot="${esc(i)}" aria-pressed="${i === 0}" aria-label="${esc(w.title)}"><i></i></button>`).join('')}<button class="spot-pause" data-spot-pause aria-label="Pausar rotación" aria-pressed="false">Ⅱ</button></div>` : ''}</div>` : ''}
   ${!f.q ? `<div class="pick-row ${total >= 2 ? '' : 'solo'}">
     ${total >= 2 ? `<button class="next-pick" id="next-pick"><span class="dice">🎲</span><span><b>¿Qué sigue?</b><small>La suerte elige qué ${M.verb}</small></span></button>` : ''}
     <a class="next-pick disc" href="#/descubrir/${mode}"><span class="dice">✨</span><span><b>Descubrir</b><small>${mode === 'leer' ? 'Manhwas y mangas para ti' : 'Animes, series y películas'}</small></span></a>
@@ -418,6 +420,12 @@ function startSpotRotation(root, pool) {
   const deck = $('#spot-deck', root);
   if (!deck || pool.length < 2) return;
   let i = 0, holdUntil = 0, startX = null, startY = 0;
+  let hovered = false, held = false, paused = false;
+  const syncPause = () => deck.classList.toggle('rotation-paused', hovered || held || paused || deck.contains(document.activeElement));
+  deck.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { hovered = true; syncPause(); } });
+  deck.addEventListener('pointerleave', () => { hovered = false; held = false; syncPause(); });
+  deck.addEventListener('focusin', syncPause);
+  deck.addEventListener('focusout', () => queueMicrotask(syncPause));
   const show = (n, dir = 1) => {
     i = (n + pool.length) % pool.length;
     const old = deck.querySelector('.spotlight');
@@ -426,14 +434,28 @@ function startSpotRotation(root, pool) {
     const nu = tmp.firstElementChild;
     if (!reducedMotion()) nu.classList.add(dir > 0 ? 'sp-in-next' : 'sp-in-prev');
     old.replaceWith(nu);
-    $$('.spot-dots button', deck).forEach((d, k) => { d.classList.toggle('on', k === i); d.style.animation = 'none'; void d.offsetWidth; d.style.animation = ''; });
+    $$('.spot-dots [data-spot]', deck).forEach((d, k) => {
+      d.classList.toggle('on', k === i);
+      d.setAttribute('aria-pressed', String(k === i));
+      d.querySelector('i')?.replaceWith(document.createElement('i'));
+    });
   };
   const timer = setInterval(() => {
     if (!deck.isConnected) { clearInterval(timer); return; }
-    if (document.hidden || sheetsOpen() || Date.now() < holdUntil) return;
+    if (reducedMotion() || document.hidden || sheetsOpen() || hovered || held || paused || deck.contains(document.activeElement) || Date.now() < holdUntil) return;
     show(i + 1);
   }, SPOT_MS);
   deck.addEventListener('click', (e) => {
+    if (deck.dataset.swiped) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  deck.addEventListener('click', (e) => {
+    const pause = e.target.closest('[data-spot-pause]');
+    if (pause) {
+      e.stopPropagation(); paused = !paused;
+      pause.setAttribute('aria-pressed', String(paused));
+      pause.setAttribute('aria-label', paused ? 'Reanudar rotación' : 'Pausar rotación');
+      pause.textContent = paused ? '▶' : 'Ⅱ'; syncPause(); return;
+    }
     const d = e.target.closest('[data-spot]');
     if (!d) return;
     e.stopPropagation();
@@ -441,22 +463,22 @@ function startSpotRotation(root, pool) {
     show(+d.dataset.spot, +d.dataset.spot >= i ? 1 : -1);
   });
   // deslizar con el dedo
-  deck.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; holdUntil = Date.now() + 60e3; });
+  deck.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; held = true; syncPause(); holdUntil = Date.now() + SPOT_MS; });
   const end = (e) => {
+    held = false; syncPause();
     holdUntil = Date.now() + SPOT_MS;
     if (startX == null) return;
     const dx = e.clientX - startX, dy = e.clientY - startY;
     startX = null;
     if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      const card = deck.querySelector('.spotlight');
-      card.dataset.swiped = '1'; // que el deslizamiento no abra la obra
-      setTimeout(() => delete card.dataset.swiped, 50);
+      deck.dataset.swiped = '1'; // El nuevo elemento tampoco debe abrirse al soltar.
+      setTimeout(() => delete deck.dataset.swiped, 100);
       show(i + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
       vibrate(6);
     }
   };
   deck.addEventListener('pointerup', end);
-  deck.addEventListener('pointercancel', () => { startX = null; holdUntil = Date.now() + SPOT_MS; });
+  deck.addEventListener('pointercancel', () => { startX = null; held = false; syncPause(); holdUntil = Date.now() + SPOT_MS; });
 }
 
 // Tarjeta grande con la obra que estás siguiendo

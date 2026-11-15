@@ -1909,3 +1909,54 @@ input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 
 @media (hover: hover) {
   .tabbar a:hover, .icon-btn:hover { background: var(--surface-2); }
 }
+
+
+/* Carruseles: scroll nativo, entradas acotadas y controles de escritorio. */
+.carousel-frame { position: relative; }
+.carousel { scroll-snap-type: x proximity; scroll-padding-inline: 16px; overscroll-behavior-x: contain; padding-block: 8px 14px; }
+.c-item { contain: layout paint; scroll-snap-stop: normal; scroll-snap-align: start; animation-delay: calc(min(var(--i, 0), 7) * 45ms); }
+.c-cover { aspect-ratio: 2 / 3; }
+.carousel.dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+.carousel.dragging * { cursor: grabbing; user-select: none; }
+.carousel-arrow { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .carousel { cursor: grab; }
+  .carousel-arrow { display: grid; place-items: center; position: absolute; top: 35%; width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 32px; line-height: 1; box-shadow: 0 4px 16px #0008; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .carousel-arrow.prev { left: 8px; }
+  .carousel-arrow.next { right: 8px; }
+  .carousel-frame:hover .carousel-arrow:not(:disabled), .carousel-frame:focus-within .carousel-arrow:not(:disabled) { opacity: 1; pointer-events: auto; }
+  .carousel-arrow:disabled { visibility: hidden; }
+}
+@supports (mask-image: linear-gradient(to right, transparent, #000)) {
+  .carousel-frame.has-prev .carousel { mask-image: linear-gradient(to right, transparent, #000 16px); }
+  .carousel-frame.has-next .carousel { mask-image: linear-gradient(to left, transparent, #000 16px); }
+  .carousel-frame.has-prev.has-next .carousel { mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent); }
+  .carousel-frame:focus-within .carousel { mask-image: none; }
+}
+.carousel-fallback .c-cover { transform: scale(.96); opacity: .78; transition: transform .25s var(--ease), opacity .25s; }
+.carousel-fallback .is-visible .c-cover, .carousel-fallback .c-item:focus-within .c-cover { transform: none; opacity: 1; }
+@supports (animation-timeline: view(inline)) {
+  @keyframes carouselFocus {
+    0%, 100% { transform: scale(.96); opacity: .78; }
+    20%, 80% { transform: scale(1); opacity: 1; }
+  }
+  .c-cover { animation: carouselFocus linear both; animation-timeline: view(inline); animation-range: entry 0% exit 100%; }
+  .c-item:focus-within .c-cover { animation: none; }
+}
+.spot-dots { gap: 0; align-items: center; margin-block: -8px 10px; }
+.spot-dots button, .spot-dots button.on { position: relative; width: 44px; height: 44px; background: none; transition: none; flex: none; }
+.spot-dots button::before { content: ''; position: absolute; top: 20px; left: 12px; width: 20px; height: 4px; border-radius: 999px; background: var(--muted); transform: scaleX(.3); opacity: .5; transition: transform .25s var(--ease), opacity .25s; }
+.spot-dots button.on::before { transform: scaleX(1); opacity: .3; }
+.spot-dots button i { display: none; }
+.spot-dots button.on i { display: block; inset: auto; top: 20px; left: 12px; width: 20px; height: 4px; border-radius: 999px; }
+.spot-dots .spot-pause { color: var(--accent-2); font-size: 18px; }
+.spot-dots .spot-pause::before { display: none; }
+.rotation-paused .spot-dots button.on i { animation-play-state: paused; }
+[data-motion="off"] .carousel *, [data-motion="off"] .spot-deck * { animation: none !important; transition: none !important; }
+[data-motion="off"] .carousel .c-cover { transform: none; opacity: 1; }
+[data-motion="off"] .spot-pause { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .carousel *, .spot-deck * { animation: none !important; transition: none !important; }
+  .carousel .c-cover { transform: none; opacity: 1; }
+  .spot-pause { display: none; }
+}
