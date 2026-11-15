@@ -241,7 +241,7 @@ async function renderHome(root, mode = 'leer') {
   <div class="search-wrap">
     <div class="searchbar">
       <span class="ic">${ICONS.search}</span>
-      <input id="q" type="search" placeholder="${mode === 'leer' ? 'Buscar en lo que lees…' : 'Buscar en lo que ves…'}" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="suggest">
+      <input id="q" type="search" aria-label="Buscar en tu biblioteca" placeholder="${mode === 'leer' ? 'Buscar en lo que lees…' : 'Buscar en lo que ves…'}" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="suggest">
       <button class="icon-btn xs q-clear ${f.q ? '' : 'hidden'}" id="q-clear" aria-label="Borrar búsqueda">${ICONS.close}</button>
       <button class="paste-btn" id="paste-btn">${ICONS.link}<span>Pegar link</span></button>
     </div>
