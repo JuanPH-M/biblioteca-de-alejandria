@@ -1913,6 +1913,7 @@ input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 
 
 /* Carruseles: scroll nativo, entradas acotadas y controles de escritorio. */
 .carousel-frame { position: relative; }
+.carousel-frame .carousel { position: relative; z-index: 0; }
 .carousel { scroll-snap-type: x proximity; scroll-padding-inline: 16px; overscroll-behavior-x: contain; padding-block: 8px 14px; }
 .c-item { contain: layout paint; scroll-snap-stop: normal; scroll-snap-align: start; animation-delay: calc(min(var(--i, 0), 7) * 45ms); }
 .c-cover { aspect-ratio: 2 / 3; }
@@ -1921,7 +1922,7 @@ input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 
 .carousel-arrow { display: none; }
 @media (hover: hover) and (pointer: fine) {
   .carousel { cursor: grab; }
-  .carousel-arrow { display: grid; place-items: center; position: absolute; top: 35%; width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 32px; line-height: 1; box-shadow: 0 4px 16px #0008; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .carousel-arrow { display: grid; place-items: center; position: absolute; z-index: 2; top: 35%; width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 32px; line-height: 1; box-shadow: 0 4px 16px #0008; opacity: 0; pointer-events: none; transition: opacity .2s; }
   .carousel-arrow.prev { left: 8px; }
   .carousel-arrow.next { right: 8px; }
   .carousel-frame:hover .carousel-arrow:not(:disabled), .carousel-frame:focus-within .carousel-arrow:not(:disabled) { opacity: 1; pointer-events: auto; }

@@ -12,7 +12,7 @@ const loadDiscover = () => import('./discover.js');
 const loadSports = () => import('./sports.js');
 
 const view = $('#view');
-export const APP_VERSION = '2.7.0';
+export const APP_VERSION = '2.8.0';
 
 // ---------- iconos SVG en el HTML estático ----------
 function hydrateIcons(root = document) {
@@ -1213,7 +1213,7 @@ async function renderDetail(root, id) {
 
     <section class="panel">
       <div class="sec-head"><h3>Notas</h3><span class="muted small" id="note-state"></span></div>
-      <textarea id="notes" rows="4" placeholder="Escribe lo que quieras recordar…">${esc(w.notes || '')}</textarea>
+      <textarea id="notes" aria-label="Notas de la obra" rows="4" placeholder="Escribe lo que quieras recordar…">${esc(w.notes || '')}</textarea>
     </section>
 
     <div class="meta-foot">
