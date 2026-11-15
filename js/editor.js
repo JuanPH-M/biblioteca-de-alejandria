@@ -436,7 +436,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
     w.title = titleInput.value.trim();
     if (!w.title) { titleInput.focus(); titleInput.classList.add('shake'); setTimeout(() => titleInput.classList.remove('shake'), 500); toast('Escribe el nombre de la obra.'); return; }
     const cv = $('#ed-cover', el).value.trim();
-    if (cv) w.cover = cv;
+    if (cv) w.cover = safeURL(cv);
     const num = (id) => { const x = $(id, el); return x && x.value !== '' ? parseFloat(x.value) : null; };
     if (w.type === 'serie') {
       const season = num('#ed-season'), ep = num('#ed-episode');
@@ -466,7 +466,7 @@ export function openEditor(work = null, { fromLink = null, prefill = null } = {}
       w.platform = '';
     }
     const chap = $('#ed-chapters', el)?.value.trim() || '';
-    w.chaptersUrl = /^https?:\/\//i.test(chap) ? chap : '';
+    w.chaptersUrl = safeURL(chap);
     const saved = await saveWork(w);
     // temporadas de TVmaze para saber cuántos episodios tiene cada una
     if (saved.type === 'serie' && saved.source?.api === 'tvmaze' && !saved.seasons && navigator.onLine) {
