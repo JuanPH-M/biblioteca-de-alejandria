@@ -36,7 +36,12 @@ export function validateBackup(data) {
   let nodes = 0;
   function tree(value, depth = 0) {
     if (++nodes > 1000000 || depth > 24) invalid();
-    if (value === null || typeof value === 'boolean' || typeof value === 'string') return;
+    if (value === null || typeof value === 'boolean') return;
+    if (typeof value === 'string') {
+      // Un sustituto aislado rompe encodeURIComponent aunque JSON.parse lo acepte.
+      if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value)) invalid();
+      return;
+    }
     if (typeof value === 'number') { if (!Number.isFinite(value)) invalid(); return; }
     if (typeof value !== 'object') invalid();
     for (const [key, child] of Object.entries(value)) {
@@ -70,7 +75,8 @@ export function validateBackup(data) {
     for (const k of ['synopsis', 'pubStatus', 'notes']) optional(w, k, text);
     for (const k of ['genres', 'aliases']) optional(w, k, strings);
     for (const k of ['favorite', 'justFinished']) optional(w, k, bool);
-    for (const k of ['total', 'rating', 'year', 'createdAt', 'updatedAt', 'watchedAt', 'lastRead', 'lastOpened', 'seasonJump']) optional(w, k, finite);
+    for (const k of ['total', 'year', 'createdAt', 'updatedAt', 'watchedAt', 'lastRead', 'lastOpened', 'seasonJump']) optional(w, k, finite);
+    optional(w, 'rating', (v) => Number.isInteger(v) && v >= 0 && v <= 5);
     optional(w, 'platform', (v) => platforms.includes(v));
     optional(w, 'cover', image);
     optional(w, 'chaptersUrl', url);
@@ -86,7 +92,7 @@ export function validateBackup(data) {
       for (const k of ['chapter', 'addedAt', 'openedAt']) optional(l, k, finite);
       return true;
     }));
-    optional(w, 'reminder', (r) => record(r) && typeof r.on === 'boolean' && Array.isArray(r.days) && r.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6) && (r.time == null || /^(?:|(?:[01]\d|2[0-3]):[0-5]\d)$/.test(r.time)));
+    optional(w, 'reminder', (r) => record(r) && typeof r.on === 'boolean' && Array.isArray(r.days) && r.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6) && (r.time == null || (typeof r.time === 'string' && /^(?:|(?:[01]\d|2[0-3]):[0-5]\d)$/.test(r.time))));
   }
   for (const p of data.patterns || []) {
     if (!record(p) || typeof p.host !== 'string' || !/^[a-z0-9.-]+$/i.test(p.host)) invalid();
